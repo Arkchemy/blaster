@@ -1,6 +1,6 @@
 #!/bin/sh
-# Compiles testdata/arithmetic.c as an unstripped, big-endian PowerPC32
-# relocatable object -- the recomp tool's input for this milestone.
+# Compiles a testdata/*.c source as an unstripped, big-endian PowerPC32
+# relocatable object -- the recomp tool's input.
 #
 # -fwrapv -fno-sanitize=undefined: without these, zig cc/clang inserts
 # UBSan-style trap sequences around signed arithmetic (overflow checks),
@@ -11,9 +11,10 @@ set -e
 cd "$(dirname "$0")/.."
 
 ZIG="${ZIG:-$HOME/devtools/zig/zig}"
-OUT="${1:-/tmp/arithmetic_ppc.o}"
+SRC="${1:-testdata/arithmetic.c}"
+OUT="${2:-/tmp/$(basename "$SRC" .c)_ppc.o}"
 
 "$ZIG" cc -target powerpc-freestanding-eabi -O0 -fwrapv -fno-sanitize=undefined \
-    -c testdata/arithmetic.c -o "$OUT"
+    -c "$SRC" -o "$OUT"
 
 echo "wrote $OUT"
