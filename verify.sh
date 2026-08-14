@@ -22,7 +22,7 @@ GROUND_TRUTH="$("$WORK/ground_truth")"
 echo "ground truth result: $GROUND_TRUTH"
 
 echo "== Compiling test program for PowerPC =="
-testdata/build_ppc.sh "$WORK/arithmetic_ppc.o" >/dev/null
+testdata/build_ppc.sh testdata/arithmetic.c "$WORK/arithmetic_ppc.o" >/dev/null
 
 echo "== Recompiling PPC object to C =="
 "$RECOMP" "$WORK/arithmetic_ppc.o" -o "$WORK/generated.c"
@@ -48,9 +48,35 @@ echo "stripped/recovered result: $STRIPPED_RESULT"
 
 echo "=========================================="
 if [ "$GROUND_TRUTH" = "$HOST_RESULT" ] && [ "$GROUND_TRUTH" = "$ARM64_RESULT" ] && [ "$GROUND_TRUTH" = "$STRIPPED_RESULT" ]; then
-    echo "PASS: all results match ($GROUND_TRUTH)"
+    echo "PASS (integer/arithmetic): all results match ($GROUND_TRUTH)"
+else
+    echo "FAIL (integer/arithmetic): results differ (ground truth=$GROUND_TRUTH, host=$HOST_RESULT, arm64=$ARM64_RESULT, stripped=$STRIPPED_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Floating-point pipeline (testdata/floating.c) =="
+gcc -O0 testdata/floating.c testdata/float_host_main.c -o "$WORK/float_ground_truth"
+FLOAT_GROUND_TRUTH="$("$WORK/float_ground_truth")"
+echo "ground truth result: $FLOAT_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/floating.c "$WORK/floating_ppc.o" >/dev/null
+"$RECOMP" "$WORK/floating_ppc.o" -o "$WORK/float_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/float_generated.c" tools/gen_harness_float.c -o "$WORK/float_generated_host"
+FLOAT_HOST_RESULT="$("$WORK/float_generated_host")"
+echo "host recompiled result: $FLOAT_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/float_generated.c" tools/gen_harness_float.c -o "$WORK/float_generated_arm64" 2>/dev/null
+FLOAT_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/float_generated_arm64")"
+echo "arm64 recompiled result (qemu): $FLOAT_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$FLOAT_GROUND_TRUTH" = "$FLOAT_HOST_RESULT" ] && [ "$FLOAT_GROUND_TRUTH" = "$FLOAT_ARM64_RESULT" ]; then
+    echo "PASS (floating-point): all results match ($FLOAT_GROUND_TRUTH)"
     exit 0
 else
-    echo "FAIL: results differ (ground truth=$GROUND_TRUTH, host=$HOST_RESULT, arm64=$ARM64_RESULT, stripped=$STRIPPED_RESULT)"
+    echo "FAIL (floating-point): results differ (ground truth=$FLOAT_GROUND_TRUTH, host=$FLOAT_HOST_RESULT, arm64=$FLOAT_ARM64_RESULT)"
     exit 1
 fi
