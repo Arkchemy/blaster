@@ -283,8 +283,34 @@ echo "arm64 recompiled result (qemu): $DOUBLE_ARM64_RESULT"
 echo "=========================================="
 if [ "$DOUBLE_GROUND_TRUTH" = "$DOUBLE_HOST_RESULT" ] && [ "$DOUBLE_GROUND_TRUTH" = "$DOUBLE_ARM64_RESULT" ]; then
     echo "PASS (double-precision): all results match ($DOUBLE_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (double-precision): results differ (ground truth=$DOUBLE_GROUND_TRUTH, host=$DOUBLE_HOST_RESULT, arm64=$DOUBLE_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Misc bitops pipeline (testdata/misc_bitops.c -- cntlzw/andc/eqv/subfic) =="
+gcc -O0 testdata/misc_bitops.c testdata/misc_bitops_host_main.c -o "$WORK/misc_bitops_ground_truth"
+MISC_GROUND_TRUTH="$("$WORK/misc_bitops_ground_truth")"
+echo "ground truth result: $MISC_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/misc_bitops.c "$WORK/misc_bitops_ppc.o" >/dev/null
+"$RECOMP" "$WORK/misc_bitops_ppc.o" -o "$WORK/misc_bitops_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/misc_bitops_generated.c" tools/gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_host"
+MISC_HOST_RESULT="$("$WORK/misc_bitops_generated_host")"
+echo "host recompiled result: $MISC_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/misc_bitops_generated.c" tools/gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_arm64" 2>/dev/null
+MISC_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/misc_bitops_generated_arm64")"
+echo "arm64 recompiled result (qemu): $MISC_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$MISC_GROUND_TRUTH" = "$MISC_HOST_RESULT" ] && [ "$MISC_GROUND_TRUTH" = "$MISC_ARM64_RESULT" ]; then
+    echo "PASS (misc bitops): all results match ($MISC_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (misc bitops): results differ (ground truth=$MISC_GROUND_TRUTH, host=$MISC_HOST_RESULT, arm64=$MISC_ARM64_RESULT)"
     exit 1
 fi
