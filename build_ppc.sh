@@ -13,8 +13,9 @@ cd "$(dirname "$0")/.."
 ZIG="${ZIG:-$HOME/devtools/zig/zig}"
 SRC="${1:-testdata/arithmetic.c}"
 OUT="${2:-/tmp/$(basename "$SRC" .c)_ppc.o}"
+OPT="${3:--O0}"
 
-"$ZIG" cc -target powerpc-freestanding-eabi -O0 -fwrapv -fno-sanitize=undefined \
+"$ZIG" cc -target powerpc-freestanding-eabi "$OPT" -fwrapv -fno-sanitize=undefined \
     -c "$SRC" -o "$OUT"
 
 echo "wrote $OUT"
