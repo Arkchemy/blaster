@@ -231,8 +231,34 @@ echo "arm64 recompiled result (qemu): $FCMP_ARM64_RESULT"
 echo "=========================================="
 if [ "$FCMP_GROUND_TRUTH" = "$FCMP_HOST_RESULT" ] && [ "$FCMP_GROUND_TRUTH" = "$FCMP_ARM64_RESULT" ]; then
     echo "PASS (float comparison): all results match ($FCMP_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (float comparison): results differ (ground truth=$FCMP_GROUND_TRUTH, host=$FCMP_HOST_RESULT, arm64=$FCMP_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== mulhw/mulhwu pipeline (testdata/mulhw.c, -O1 -- division-by-constant only shows up above -O0) =="
+gcc -O0 testdata/mulhw.c testdata/mulhw_host_main.c -o "$WORK/mulhw_ground_truth"
+MULHW_GROUND_TRUTH="$("$WORK/mulhw_ground_truth")"
+echo "ground truth result: $MULHW_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/mulhw.c "$WORK/mulhw_ppc.o" -O1 >/dev/null
+"$RECOMP" "$WORK/mulhw_ppc.o" -o "$WORK/mulhw_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/mulhw_generated.c" tools/gen_harness_mulhw.c -o "$WORK/mulhw_generated_host"
+MULHW_HOST_RESULT="$("$WORK/mulhw_generated_host")"
+echo "host recompiled result: $MULHW_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/mulhw_generated.c" tools/gen_harness_mulhw.c -o "$WORK/mulhw_generated_arm64" 2>/dev/null
+MULHW_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/mulhw_generated_arm64")"
+echo "arm64 recompiled result (qemu): $MULHW_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$MULHW_GROUND_TRUTH" = "$MULHW_HOST_RESULT" ] && [ "$MULHW_GROUND_TRUTH" = "$MULHW_ARM64_RESULT" ]; then
+    echo "PASS (mulhw/mulhwu): all results match ($MULHW_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (mulhw/mulhwu): results differ (ground truth=$MULHW_GROUND_TRUTH, host=$MULHW_HOST_RESULT, arm64=$MULHW_ARM64_RESULT)"
     exit 1
 fi
