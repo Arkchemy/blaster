@@ -205,8 +205,34 @@ echo "arm64 recompiled result (qemu): $INDEXED_ARM64_RESULT"
 echo "=========================================="
 if [ "$INDEXED_GROUND_TRUTH" = "$INDEXED_HOST_RESULT" ] && [ "$INDEXED_GROUND_TRUTH" = "$INDEXED_ARM64_RESULT" ]; then
     echo "PASS (indexed load/store): all results match ($INDEXED_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (indexed load/store): results differ (ground truth=$INDEXED_GROUND_TRUTH, host=$INDEXED_HOST_RESULT, arm64=$INDEXED_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Float comparison pipeline (testdata/fcmp.c) =="
+gcc -O0 testdata/fcmp.c testdata/fcmp_host_main.c -o "$WORK/fcmp_ground_truth"
+FCMP_GROUND_TRUTH="$("$WORK/fcmp_ground_truth")"
+echo "ground truth result: $FCMP_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/fcmp.c "$WORK/fcmp_ppc.o" >/dev/null
+"$RECOMP" "$WORK/fcmp_ppc.o" -o "$WORK/fcmp_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/fcmp_generated.c" tools/gen_harness_fcmp.c -o "$WORK/fcmp_generated_host"
+FCMP_HOST_RESULT="$("$WORK/fcmp_generated_host")"
+echo "host recompiled result: $FCMP_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/fcmp_generated.c" tools/gen_harness_fcmp.c -o "$WORK/fcmp_generated_arm64" 2>/dev/null
+FCMP_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/fcmp_generated_arm64")"
+echo "arm64 recompiled result (qemu): $FCMP_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$FCMP_GROUND_TRUTH" = "$FCMP_HOST_RESULT" ] && [ "$FCMP_GROUND_TRUTH" = "$FCMP_ARM64_RESULT" ]; then
+    echo "PASS (float comparison): all results match ($FCMP_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (float comparison): results differ (ground truth=$FCMP_GROUND_TRUTH, host=$FCMP_HOST_RESULT, arm64=$FCMP_ARM64_RESULT)"
     exit 1
 fi
