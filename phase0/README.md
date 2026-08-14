@@ -9,22 +9,28 @@ used homebrew-scene tooling, documented so the workflow is reproducible.
 ## 1. Dump the game (needs real Wii U hardware)
 
 Can't be automated from a dev sandbox or a script — needs the actual
-console. Two tools, pick one depending on whether a raw disc image or an
-already-installable dump is wanted:
+console.
 
+**On Aroma specifically (the current CFW): use
+[Dumpling](https://dumplingapp.com/)**, the actively-maintained, official
+Aroma-supported all-in-one dumper. One real operational gotcha: Aroma
+users need to **reboot without Aroma first** (hold R at boot) and run
+Dumpling standalone from there — running it *while* Aroma is also active
+risks SD card corruption from both touching the card at once. Handles
+both disc and digital titles; for a disc game specifically, dump the disc
+itself rather than trying to pull it from the eShop.
+
+Older/alternative tools, if not on Aroma or Dumpling isn't available for
+some reason:
 - **[disc2app](https://www.gamebrew.org/wiki/Disc2app_Wii_U)** — dumps
-  straight to installable `.app`/`.h3`/`.tmd`/`.cert`/`.tik` files (skips
-  needing a separate "convert raw dump to installable" step). Faster than a
-  full disc dump since it only reads what's needed. Needs ~23GB free space
-  on the destination SD/USB.
-- **WUDD** — dumps a full raw `.wud`/`.wux` disc image instead, if that's
-  preferred (e.g. for archival). Needs converting to installable format
-  afterward.
+  straight to installable `.app`/`.h3`/`.tmd`/`.cert`/`.tik` files. Needs
+  ~23GB free space on the destination SD/USB.
+- **WUDD** — dumps a full raw `.wud`/`.wux` disc image instead (e.g. for
+  archival), needs converting to installable format afterward.
 
-Either way, this step happens entirely on-console via the Homebrew
-Launcher — see [ConsoleMods: Creating Game Backups](https://consolemods.org/wiki/WiiU:Creating_Game_Backups)
-for the current, actively-maintained step-by-step guide (this changes with
-Wii U CFW versions faster than it's worth duplicating here).
+See [ConsoleMods: Creating Game Backups](https://consolemods.org/wiki/WiiU:Creating_Game_Backups)
+for the current, actively-maintained step-by-step guide either way (CFW
+tooling moves faster than is worth duplicating in detail here).
 
 ## 2. Get the Wii U common key
 
