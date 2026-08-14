@@ -179,8 +179,34 @@ echo "arm64 recompiled result (qemu): $DIVISION_ARM64_RESULT"
 echo "=========================================="
 if [ "$DIVISION_GROUND_TRUTH" = "$DIVISION_HOST_RESULT" ] && [ "$DIVISION_GROUND_TRUTH" = "$DIVISION_ARM64_RESULT" ]; then
     echo "PASS (division): all results match ($DIVISION_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (division): results differ (ground truth=$DIVISION_GROUND_TRUTH, host=$DIVISION_HOST_RESULT, arm64=$DIVISION_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Indexed load/store pipeline (testdata/indexed.c) =="
+gcc -O0 testdata/indexed.c testdata/indexed_host_main.c -o "$WORK/indexed_ground_truth"
+INDEXED_GROUND_TRUTH="$("$WORK/indexed_ground_truth")"
+echo "ground truth result: $INDEXED_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/indexed.c "$WORK/indexed_ppc.o" >/dev/null
+"$RECOMP" "$WORK/indexed_ppc.o" -o "$WORK/indexed_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/indexed_generated.c" tools/gen_harness_indexed.c -o "$WORK/indexed_generated_host"
+INDEXED_HOST_RESULT="$("$WORK/indexed_generated_host")"
+echo "host recompiled result: $INDEXED_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/indexed_generated.c" tools/gen_harness_indexed.c -o "$WORK/indexed_generated_arm64" 2>/dev/null
+INDEXED_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/indexed_generated_arm64")"
+echo "arm64 recompiled result (qemu): $INDEXED_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$INDEXED_GROUND_TRUTH" = "$INDEXED_HOST_RESULT" ] && [ "$INDEXED_GROUND_TRUTH" = "$INDEXED_ARM64_RESULT" ]; then
+    echo "PASS (indexed load/store): all results match ($INDEXED_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (indexed load/store): results differ (ground truth=$INDEXED_GROUND_TRUTH, host=$INDEXED_HOST_RESULT, arm64=$INDEXED_ARM64_RESULT)"
     exit 1
 fi
