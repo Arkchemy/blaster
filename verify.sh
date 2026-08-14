@@ -75,8 +75,34 @@ echo "arm64 recompiled result (qemu): $FLOAT_ARM64_RESULT"
 echo "=========================================="
 if [ "$FLOAT_GROUND_TRUTH" = "$FLOAT_HOST_RESULT" ] && [ "$FLOAT_GROUND_TRUTH" = "$FLOAT_ARM64_RESULT" ]; then
     echo "PASS (floating-point): all results match ($FLOAT_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (floating-point): results differ (ground truth=$FLOAT_GROUND_TRUTH, host=$FLOAT_HOST_RESULT, arm64=$FLOAT_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Bitwise/shift/byte-halfword pipeline (testdata/bitops.c) =="
+gcc -O0 testdata/bitops.c testdata/bitops_host_main.c -o "$WORK/bitops_ground_truth"
+BITOPS_GROUND_TRUTH="$("$WORK/bitops_ground_truth")"
+echo "ground truth result: $BITOPS_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/bitops.c "$WORK/bitops_ppc.o" >/dev/null
+"$RECOMP" "$WORK/bitops_ppc.o" -o "$WORK/bitops_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/bitops_generated.c" tools/gen_harness.c -o "$WORK/bitops_generated_host"
+BITOPS_HOST_RESULT="$("$WORK/bitops_generated_host")"
+echo "host recompiled result: $BITOPS_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/bitops_generated.c" tools/gen_harness.c -o "$WORK/bitops_generated_arm64" 2>/dev/null
+BITOPS_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/bitops_generated_arm64")"
+echo "arm64 recompiled result (qemu): $BITOPS_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$BITOPS_GROUND_TRUTH" = "$BITOPS_HOST_RESULT" ] && [ "$BITOPS_GROUND_TRUTH" = "$BITOPS_ARM64_RESULT" ]; then
+    echo "PASS (bitwise/shift): all results match ($BITOPS_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (bitwise/shift): results differ (ground truth=$BITOPS_GROUND_TRUTH, host=$BITOPS_HOST_RESULT, arm64=$BITOPS_ARM64_RESULT)"
     exit 1
 fi
