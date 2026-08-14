@@ -524,8 +524,49 @@ echo "arm64 recompiled result (qemu): $MULTIFILE_ARM64_RESULT"
 echo "=========================================="
 if [ "$MULTIFILE_GROUND_TRUTH" = "$MULTIFILE_HOST_RESULT" ] && [ "$MULTIFILE_GROUND_TRUTH" = "$MULTIFILE_ARM64_RESULT" ]; then
     echo "PASS (multi-object-file linking): all results match ($MULTIFILE_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (multi-object-file linking): results differ (ground truth=$MULTIFILE_GROUND_TRUTH, host=$MULTIFILE_HOST_RESULT, arm64=$MULTIFILE_ARM64_RESULT)"
     exit 1
 fi
+
+# The following three pipelines cover instructions found missing while
+# recompiling a real, genuine Wii U homebrew .rpx (vgmoose/wiiu-space,
+# open source) -- not guessed at, found by actually running recomp
+# against real devkitPPC/GCC-compiled code and looking at what it
+# couldn't handle. See README's "real-world validation" section.
+
+run_pipeline() {
+    name="$1"; label="$2"; opt="$3"
+    echo ""
+    echo "== $label (testdata/$name.c) =="
+    gcc -O0 "testdata/$name.c" "testdata/${name}_host_main.c" -o "$WORK/${name}_ground_truth"
+    gt="$("$WORK/${name}_ground_truth")"
+    echo "ground truth result: $gt"
+
+    testdata/build_ppc.sh "testdata/$name.c" "$WORK/${name}_ppc.o" "$opt" >/dev/null
+    "$RECOMP" "$WORK/${name}_ppc.o" -o "$WORK/${name}_generated.c" >&2
+
+    gcc -O0 -Irecomp/include "$WORK/${name}_generated.c" "tools/gen_harness_${name}.c" -o "$WORK/${name}_generated_host"
+    host="$("$WORK/${name}_generated_host")"
+    echo "host recompiled result: $host"
+
+    "$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+        "$WORK/${name}_generated.c" "tools/gen_harness_${name}.c" -o "$WORK/${name}_generated_arm64" 2>/dev/null
+    arm64="$("$QEMU_AARCH64" "$WORK/${name}_generated_arm64")"
+    echo "arm64 recompiled result (qemu): $arm64"
+
+    echo "=========================================="
+    if [ "$gt" = "$host" ] && [ "$gt" = "$arm64" ]; then
+        echo "PASS ($label): all results match"
+    else
+        echo "FAIL ($label): results differ (ground truth=$gt, host=$host, arm64=$arm64)"
+        exit 1
+    fi
+}
+
+run_pipeline andi_lwzu "andi./lwzu (real Wii U code find)" -O1
+run_pipeline cond_return "conditional-return blelr/etc (real Wii U code find)" -O1
+run_pipeline addis_frsp "addis/frsp (real Wii U code find)" -O1
+
+echo ""
+echo "All pipelines passed."
