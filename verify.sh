@@ -416,8 +416,34 @@ echo "arm64 recompiled result (qemu): $FNPTR_ARM64_RESULT"
 echo "=========================================="
 if [ "$FNPTR_GROUND_TRUTH" = "$FNPTR_HOST_RESULT" ] && [ "$FNPTR_GROUND_TRUTH" = "$FNPTR_ARM64_RESULT" ]; then
     echo "PASS (indirect function-pointer calls): all results match"
-    exit 0
 else
     echo "FAIL (indirect function-pointer calls): results differ (ground truth=$FNPTR_GROUND_TRUTH, host=$FNPTR_HOST_RESULT, arm64=$FNPTR_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Counted-loop pipeline (testdata/loop_counted.c -- mtctr/bdnz, -O2) =="
+gcc -O0 testdata/loop_counted.c testdata/loop_counted_host_main.c -o "$WORK/loop_counted_ground_truth"
+LOOP_GROUND_TRUTH="$("$WORK/loop_counted_ground_truth")"
+echo "ground truth result: $LOOP_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/loop_counted.c "$WORK/loop_counted_ppc.o" -O2 >/dev/null
+"$RECOMP" "$WORK/loop_counted_ppc.o" -o "$WORK/loop_counted_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/loop_counted_generated.c" tools/gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_host"
+LOOP_HOST_RESULT="$("$WORK/loop_counted_generated_host")"
+echo "host recompiled result: $LOOP_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/loop_counted_generated.c" tools/gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_arm64" 2>/dev/null
+LOOP_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/loop_counted_generated_arm64")"
+echo "arm64 recompiled result (qemu): $LOOP_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$LOOP_GROUND_TRUTH" = "$LOOP_HOST_RESULT" ] && [ "$LOOP_GROUND_TRUTH" = "$LOOP_ARM64_RESULT" ]; then
+    echo "PASS (counted loop / mtctr+bdnz): all results match ($LOOP_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (counted loop / mtctr+bdnz): results differ (ground truth=$LOOP_GROUND_TRUTH, host=$LOOP_HOST_RESULT, arm64=$LOOP_ARM64_RESULT)"
     exit 1
 fi
