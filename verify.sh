@@ -309,8 +309,34 @@ echo "arm64 recompiled result (qemu): $MISC_ARM64_RESULT"
 echo "=========================================="
 if [ "$MISC_GROUND_TRUTH" = "$MISC_HOST_RESULT" ] && [ "$MISC_GROUND_TRUTH" = "$MISC_ARM64_RESULT" ]; then
     echo "PASS (misc bitops): all results match ($MISC_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (misc bitops): results differ (ground truth=$MISC_GROUND_TRUTH, host=$MISC_HOST_RESULT, arm64=$MISC_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Mixed double-precision integration pipeline (testdata/mixed_double.c) =="
+gcc -O0 testdata/mixed_double.c testdata/mixed_double_host_main.c -o "$WORK/mixed_double_ground_truth"
+MIXED_GROUND_TRUTH="$("$WORK/mixed_double_ground_truth")"
+echo "ground truth result: $MIXED_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/mixed_double.c "$WORK/mixed_double_ppc.o" >/dev/null
+"$RECOMP" "$WORK/mixed_double_ppc.o" -o "$WORK/mixed_double_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/mixed_double_generated.c" tools/gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_host"
+MIXED_HOST_RESULT="$("$WORK/mixed_double_generated_host")"
+echo "host recompiled result: $MIXED_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/mixed_double_generated.c" tools/gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_arm64" 2>/dev/null
+MIXED_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/mixed_double_generated_arm64")"
+echo "arm64 recompiled result (qemu): $MIXED_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$MIXED_GROUND_TRUTH" = "$MIXED_HOST_RESULT" ] && [ "$MIXED_GROUND_TRUTH" = "$MIXED_ARM64_RESULT" ]; then
+    echo "PASS (mixed double integration): all results match ($MIXED_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (mixed double integration): results differ (ground truth=$MIXED_GROUND_TRUTH, host=$MIXED_HOST_RESULT, arm64=$MIXED_ARM64_RESULT)"
     exit 1
 fi
