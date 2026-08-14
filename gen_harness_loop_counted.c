@@ -7,10 +7,12 @@
 #include "ppc_runtime.h"
 
 void ppc_sumn(PpcContext *ctx);
+void ppc_init_globals(PpcContext *ctx);
 
 int main(void) {
     static PpcContext ctx; /* zero-initialized by BSS */
     ctx.r[1] = sizeof(ctx.mem) - 256; /* stack pointer, with headroom */
+    ppc_init_globals(&ctx);
 
     uint32_t acc_addr = 0x100;
     ppc_store_u32(&ctx, acc_addr, 7);

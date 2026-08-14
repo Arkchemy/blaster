@@ -442,8 +442,34 @@ echo "arm64 recompiled result (qemu): $LOOP_ARM64_RESULT"
 echo "=========================================="
 if [ "$LOOP_GROUND_TRUTH" = "$LOOP_HOST_RESULT" ] && [ "$LOOP_GROUND_TRUTH" = "$LOOP_ARM64_RESULT" ]; then
     echo "PASS (counted loop / mtctr+bdnz): all results match ($LOOP_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (counted loop / mtctr+bdnz): results differ (ground truth=$LOOP_GROUND_TRUTH, host=$LOOP_HOST_RESULT, arm64=$LOOP_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Rodata address-taking pipeline (testdata/rodata_table.c -- switch-statement lookup table, -O2) =="
+gcc -O0 testdata/rodata_table.c testdata/rodata_table_host_main.c -o "$WORK/rodata_table_ground_truth"
+RTBL_GROUND_TRUTH="$("$WORK/rodata_table_ground_truth")"
+echo "ground truth result: $RTBL_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/rodata_table.c "$WORK/rodata_table_ppc.o" -O2 >/dev/null
+"$RECOMP" "$WORK/rodata_table_ppc.o" -o "$WORK/rodata_table_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/rodata_table_generated.c" tools/gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_host"
+RTBL_HOST_RESULT="$("$WORK/rodata_table_generated_host")"
+echo "host recompiled result: $RTBL_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/rodata_table_generated.c" tools/gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_arm64" 2>/dev/null
+RTBL_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/rodata_table_generated_arm64")"
+echo "arm64 recompiled result (qemu): $RTBL_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$RTBL_GROUND_TRUTH" = "$RTBL_HOST_RESULT" ] && [ "$RTBL_GROUND_TRUTH" = "$RTBL_ARM64_RESULT" ]; then
+    echo "PASS (rodata address-taking / switch lookup table): all results match"
+    exit 0
+else
+    echo "FAIL (rodata address-taking / switch lookup table): results differ (ground truth=$RTBL_GROUND_TRUTH, host=$RTBL_HOST_RESULT, arm64=$RTBL_ARM64_RESULT)"
     exit 1
 fi

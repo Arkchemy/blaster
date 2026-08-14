@@ -7,10 +7,12 @@
 #include "ppc_runtime.h"
 
 void ppc_compute(PpcContext *ctx);
+void ppc_init_globals(PpcContext *ctx);
 
 int main(void) {
     static PpcContext ctx; /* zero-initialized by BSS */
     ctx.r[1] = sizeof(ctx.mem) - 256; /* stack pointer, with headroom for stwu */
+    ppc_init_globals(&ctx);
 
     ctx.r[3] = 10;
     ctx.r[4] = 20;
