@@ -335,8 +335,37 @@ echo "arm64 recompiled result (qemu): $MIXED_ARM64_RESULT"
 echo "=========================================="
 if [ "$MIXED_GROUND_TRUTH" = "$MIXED_HOST_RESULT" ] && [ "$MIXED_GROUND_TRUTH" = "$MIXED_ARM64_RESULT" ]; then
     echo "PASS (mixed double integration): all results match ($MIXED_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (mixed double integration): results differ (ground truth=$MIXED_GROUND_TRUTH, host=$MIXED_HOST_RESULT, arm64=$MIXED_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Global/static variable pipeline (testdata/globals.c) =="
+gcc -O0 testdata/globals.c testdata/globals_host_main.c -o "$WORK/globals_ground_truth"
+GLOBALS_GROUND_TRUTH="$("$WORK/globals_ground_truth")"
+echo "ground truth result:"
+echo "$GLOBALS_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/globals.c "$WORK/globals_ppc.o" >/dev/null
+"$RECOMP" "$WORK/globals_ppc.o" -o "$WORK/globals_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/globals_generated.c" tools/gen_harness_globals.c -o "$WORK/globals_generated_host"
+GLOBALS_HOST_RESULT="$("$WORK/globals_generated_host")"
+echo "host recompiled result:"
+echo "$GLOBALS_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/globals_generated.c" tools/gen_harness_globals.c -o "$WORK/globals_generated_arm64" 2>/dev/null
+GLOBALS_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/globals_generated_arm64")"
+echo "arm64 recompiled result (qemu):"
+echo "$GLOBALS_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$GLOBALS_GROUND_TRUTH" = "$GLOBALS_HOST_RESULT" ] && [ "$GLOBALS_GROUND_TRUTH" = "$GLOBALS_ARM64_RESULT" ]; then
+    echo "PASS (global/static variables): all results match"
+    exit 0
+else
+    echo "FAIL (global/static variables): results differ"
     exit 1
 fi
