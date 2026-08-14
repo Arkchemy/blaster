@@ -153,8 +153,34 @@ echo "arm64 recompiled result (qemu): $CARRY_ARM64_RESULT"
 echo "=========================================="
 if [ "$CARRY_GROUND_TRUTH" = "$CARRY_HOST_RESULT" ] && [ "$CARRY_GROUND_TRUTH" = "$CARRY_ARM64_RESULT" ]; then
     echo "PASS (carry/64-bit): all results match ($CARRY_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (carry/64-bit): results differ (ground truth=$CARRY_GROUND_TRUTH, host=$CARRY_HOST_RESULT, arm64=$CARRY_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Division pipeline (testdata/division.c) =="
+gcc -O0 testdata/division.c testdata/division_host_main.c -o "$WORK/division_ground_truth"
+DIVISION_GROUND_TRUTH="$("$WORK/division_ground_truth")"
+echo "ground truth result: $DIVISION_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/division.c "$WORK/division_ppc.o" >/dev/null
+"$RECOMP" "$WORK/division_ppc.o" -o "$WORK/division_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/division_generated.c" tools/gen_harness_division.c -o "$WORK/division_generated_host"
+DIVISION_HOST_RESULT="$("$WORK/division_generated_host")"
+echo "host recompiled result: $DIVISION_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/division_generated.c" tools/gen_harness_division.c -o "$WORK/division_generated_arm64" 2>/dev/null
+DIVISION_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/division_generated_arm64")"
+echo "arm64 recompiled result (qemu): $DIVISION_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$DIVISION_GROUND_TRUTH" = "$DIVISION_HOST_RESULT" ] && [ "$DIVISION_GROUND_TRUTH" = "$DIVISION_ARM64_RESULT" ]; then
+    echo "PASS (division): all results match ($DIVISION_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (division): results differ (ground truth=$DIVISION_GROUND_TRUTH, host=$DIVISION_HOST_RESULT, arm64=$DIVISION_ARM64_RESULT)"
     exit 1
 fi
