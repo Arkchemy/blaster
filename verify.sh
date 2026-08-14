@@ -494,8 +494,38 @@ echo "arm64 recompiled result (qemu): $MANYARGS_ARM64_RESULT"
 echo "=========================================="
 if [ "$MANYARGS_GROUND_TRUTH" = "$MANYARGS_HOST_RESULT" ] && [ "$MANYARGS_GROUND_TRUTH" = "$MANYARGS_ARM64_RESULT" ]; then
     echo "PASS (many arguments / stack-passed calling convention): all results match ($MANYARGS_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (many arguments / stack-passed calling convention): results differ (ground truth=$MANYARGS_GROUND_TRUTH, host=$MANYARGS_HOST_RESULT, arm64=$MANYARGS_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Multi-object-file linking pipeline (testdata/multifile_a.c + multifile_b.c, separately recompiled) =="
+gcc -O0 testdata/multifile_a.c testdata/multifile_b.c testdata/multifile_host_main.c -o "$WORK/multifile_ground_truth"
+MULTIFILE_GROUND_TRUTH="$("$WORK/multifile_ground_truth")"
+echo "ground truth result: $MULTIFILE_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/multifile_a.c "$WORK/multifile_a_ppc.o" >/dev/null
+testdata/build_ppc.sh testdata/multifile_b.c "$WORK/multifile_b_ppc.o" >/dev/null
+"$RECOMP" --extern-globals "$WORK/multifile_a_ppc.o" -o "$WORK/multifile_a_generated.c" >&2
+"$RECOMP" "$WORK/multifile_b_ppc.o" -o "$WORK/multifile_b_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/multifile_a_generated.c" "$WORK/multifile_b_generated.c" tools/gen_harness_multifile.c \
+    -o "$WORK/multifile_generated_host"
+MULTIFILE_HOST_RESULT="$("$WORK/multifile_generated_host")"
+echo "host recompiled result: $MULTIFILE_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/multifile_a_generated.c" "$WORK/multifile_b_generated.c" tools/gen_harness_multifile.c \
+    -o "$WORK/multifile_generated_arm64" 2>/dev/null
+MULTIFILE_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/multifile_generated_arm64")"
+echo "arm64 recompiled result (qemu): $MULTIFILE_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$MULTIFILE_GROUND_TRUTH" = "$MULTIFILE_HOST_RESULT" ] && [ "$MULTIFILE_GROUND_TRUTH" = "$MULTIFILE_ARM64_RESULT" ]; then
+    echo "PASS (multi-object-file linking): all results match ($MULTIFILE_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (multi-object-file linking): results differ (ground truth=$MULTIFILE_GROUND_TRUTH, host=$MULTIFILE_HOST_RESULT, arm64=$MULTIFILE_ARM64_RESULT)"
     exit 1
 fi
