@@ -127,8 +127,34 @@ echo "arm64 recompiled result (qemu): $ROTATE_ARM64_RESULT"
 echo "=========================================="
 if [ "$ROTATE_GROUND_TRUTH" = "$ROTATE_HOST_RESULT" ] && [ "$ROTATE_GROUND_TRUTH" = "$ROTATE_ARM64_RESULT" ]; then
     echo "PASS (rotate/mask): all results match ($ROTATE_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (rotate/mask): results differ (ground truth=$ROTATE_GROUND_TRUTH, host=$ROTATE_HOST_RESULT, arm64=$ROTATE_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Carry (64-bit arithmetic) pipeline (testdata/carry.c) =="
+gcc -O0 testdata/carry.c testdata/carry_host_main.c -o "$WORK/carry_ground_truth"
+CARRY_GROUND_TRUTH="$("$WORK/carry_ground_truth")"
+echo "ground truth result: $CARRY_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/carry.c "$WORK/carry_ppc.o" >/dev/null
+"$RECOMP" "$WORK/carry_ppc.o" -o "$WORK/carry_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/carry_generated.c" tools/gen_harness_carry.c -o "$WORK/carry_generated_host"
+CARRY_HOST_RESULT="$("$WORK/carry_generated_host")"
+echo "host recompiled result: $CARRY_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/carry_generated.c" tools/gen_harness_carry.c -o "$WORK/carry_generated_arm64" 2>/dev/null
+CARRY_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/carry_generated_arm64")"
+echo "arm64 recompiled result (qemu): $CARRY_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$CARRY_GROUND_TRUTH" = "$CARRY_HOST_RESULT" ] && [ "$CARRY_GROUND_TRUTH" = "$CARRY_ARM64_RESULT" ]; then
+    echo "PASS (carry/64-bit): all results match ($CARRY_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (carry/64-bit): results differ (ground truth=$CARRY_GROUND_TRUTH, host=$CARRY_HOST_RESULT, arm64=$CARRY_ARM64_RESULT)"
     exit 1
 fi
