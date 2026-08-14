@@ -257,8 +257,34 @@ echo "arm64 recompiled result (qemu): $MULHW_ARM64_RESULT"
 echo "=========================================="
 if [ "$MULHW_GROUND_TRUTH" = "$MULHW_HOST_RESULT" ] && [ "$MULHW_GROUND_TRUTH" = "$MULHW_ARM64_RESULT" ]; then
     echo "PASS (mulhw/mulhwu): all results match ($MULHW_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (mulhw/mulhwu): results differ (ground truth=$MULHW_GROUND_TRUTH, host=$MULHW_HOST_RESULT, arm64=$MULHW_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Double-precision pipeline (testdata/double.c) =="
+gcc -O0 testdata/double.c testdata/double_host_main.c -o "$WORK/double_ground_truth"
+DOUBLE_GROUND_TRUTH="$("$WORK/double_ground_truth")"
+echo "ground truth result: $DOUBLE_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/double.c "$WORK/double_ppc.o" >/dev/null
+"$RECOMP" "$WORK/double_ppc.o" -o "$WORK/double_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/double_generated.c" tools/gen_harness_double.c -o "$WORK/double_generated_host"
+DOUBLE_HOST_RESULT="$("$WORK/double_generated_host")"
+echo "host recompiled result: $DOUBLE_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/double_generated.c" tools/gen_harness_double.c -o "$WORK/double_generated_arm64" 2>/dev/null
+DOUBLE_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/double_generated_arm64")"
+echo "arm64 recompiled result (qemu): $DOUBLE_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$DOUBLE_GROUND_TRUTH" = "$DOUBLE_HOST_RESULT" ] && [ "$DOUBLE_GROUND_TRUTH" = "$DOUBLE_ARM64_RESULT" ]; then
+    echo "PASS (double-precision): all results match ($DOUBLE_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (double-precision): results differ (ground truth=$DOUBLE_GROUND_TRUTH, host=$DOUBLE_HOST_RESULT, arm64=$DOUBLE_ARM64_RESULT)"
     exit 1
 fi
