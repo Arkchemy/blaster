@@ -364,8 +364,34 @@ echo "$GLOBALS_ARM64_RESULT"
 echo "=========================================="
 if [ "$GLOBALS_GROUND_TRUTH" = "$GLOBALS_HOST_RESULT" ] && [ "$GLOBALS_GROUND_TRUTH" = "$GLOBALS_ARM64_RESULT" ]; then
     echo "PASS (global/static variables): all results match"
-    exit 0
 else
     echo "FAIL (global/static variables): results differ"
+    exit 1
+fi
+
+echo ""
+echo "== Multi-function global-sharing pipeline (testdata/multifunc_globals.c) =="
+gcc -O0 testdata/multifunc_globals.c testdata/multifunc_globals_host_main.c -o "$WORK/multifunc_globals_ground_truth"
+MFG_GROUND_TRUTH="$("$WORK/multifunc_globals_ground_truth")"
+echo "ground truth result: $MFG_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/multifunc_globals.c "$WORK/multifunc_globals_ppc.o" >/dev/null
+"$RECOMP" "$WORK/multifunc_globals_ppc.o" -o "$WORK/multifunc_globals_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/multifunc_globals_generated.c" tools/gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_host"
+MFG_HOST_RESULT="$("$WORK/multifunc_globals_generated_host")"
+echo "host recompiled result: $MFG_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/multifunc_globals_generated.c" tools/gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_arm64" 2>/dev/null
+MFG_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/multifunc_globals_generated_arm64")"
+echo "arm64 recompiled result (qemu): $MFG_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$MFG_GROUND_TRUTH" = "$MFG_HOST_RESULT" ] && [ "$MFG_GROUND_TRUTH" = "$MFG_ARM64_RESULT" ]; then
+    echo "PASS (multi-function global sharing): all results match ($MFG_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (multi-function global sharing): results differ (ground truth=$MFG_GROUND_TRUTH, host=$MFG_HOST_RESULT, arm64=$MFG_ARM64_RESULT)"
     exit 1
 fi
