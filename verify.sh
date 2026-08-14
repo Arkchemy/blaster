@@ -390,8 +390,34 @@ echo "arm64 recompiled result (qemu): $MFG_ARM64_RESULT"
 echo "=========================================="
 if [ "$MFG_GROUND_TRUTH" = "$MFG_HOST_RESULT" ] && [ "$MFG_GROUND_TRUTH" = "$MFG_ARM64_RESULT" ]; then
     echo "PASS (multi-function global sharing): all results match ($MFG_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (multi-function global sharing): results differ (ground truth=$MFG_GROUND_TRUTH, host=$MFG_HOST_RESULT, arm64=$MFG_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Indirect call (function pointer) pipeline (testdata/fnptr.c -- mtctr/bctrl) =="
+gcc -O0 testdata/fnptr.c testdata/fnptr_host_main.c -o "$WORK/fnptr_ground_truth"
+FNPTR_GROUND_TRUTH="$("$WORK/fnptr_ground_truth")"
+echo "ground truth result: $FNPTR_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/fnptr.c "$WORK/fnptr_ppc.o" >/dev/null
+"$RECOMP" "$WORK/fnptr_ppc.o" -o "$WORK/fnptr_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/fnptr_generated.c" tools/gen_harness_fnptr.c -o "$WORK/fnptr_generated_host"
+FNPTR_HOST_RESULT="$("$WORK/fnptr_generated_host")"
+echo "host recompiled result: $FNPTR_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/fnptr_generated.c" tools/gen_harness_fnptr.c -o "$WORK/fnptr_generated_arm64" 2>/dev/null
+FNPTR_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/fnptr_generated_arm64")"
+echo "arm64 recompiled result (qemu): $FNPTR_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$FNPTR_GROUND_TRUTH" = "$FNPTR_HOST_RESULT" ] && [ "$FNPTR_GROUND_TRUTH" = "$FNPTR_ARM64_RESULT" ]; then
+    echo "PASS (indirect function-pointer calls): all results match"
+    exit 0
+else
+    echo "FAIL (indirect function-pointer calls): results differ (ground truth=$FNPTR_GROUND_TRUTH, host=$FNPTR_HOST_RESULT, arm64=$FNPTR_ARM64_RESULT)"
     exit 1
 fi
