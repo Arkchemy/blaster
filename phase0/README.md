@@ -20,6 +20,14 @@ risks SD card corruption from both touching the card at once. Handles
 both disc and digital titles; for a disc game specifically, dump the disc
 itself rather than trying to pull it from the eShop.
 
+**What Dumpling actually outputs:** an extracted-but-still-encrypted
+dump — it skips past ever needing a raw `.wud`/`.wux` disc image, similar
+to `disc2app` below, but the content itself is still per-console-key
+encrypted. That still needs a decrypt pass (step 3 below) before it's the
+`code`/`content`/`meta` folder (`.rpx` under `code/`) anything can
+actually load — a decrypted dump with any of those three folders missing
+or partial means re-dump, not try to patch around it.
+
 Older/alternative tools, if not on Aroma or Dumpling isn't available for
 some reason:
 - **[disc2app](https://www.gamebrew.org/wiki/Disc2app_Wii_U)** — dumps
