@@ -468,8 +468,34 @@ echo "arm64 recompiled result (qemu): $RTBL_ARM64_RESULT"
 echo "=========================================="
 if [ "$RTBL_GROUND_TRUTH" = "$RTBL_HOST_RESULT" ] && [ "$RTBL_GROUND_TRUTH" = "$RTBL_ARM64_RESULT" ]; then
     echo "PASS (rodata address-taking / switch lookup table): all results match"
-    exit 0
 else
     echo "FAIL (rodata address-taking / switch lookup table): results differ (ground truth=$RTBL_GROUND_TRUTH, host=$RTBL_HOST_RESULT, arm64=$RTBL_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Many-arguments (stack-passed args) pipeline (testdata/manyargs.c) =="
+gcc -O0 testdata/manyargs.c testdata/manyargs_host_main.c -o "$WORK/manyargs_ground_truth"
+MANYARGS_GROUND_TRUTH="$("$WORK/manyargs_ground_truth")"
+echo "ground truth result: $MANYARGS_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/manyargs.c "$WORK/manyargs_ppc.o" >/dev/null
+"$RECOMP" "$WORK/manyargs_ppc.o" -o "$WORK/manyargs_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/manyargs_generated.c" tools/gen_harness_manyargs.c -o "$WORK/manyargs_generated_host"
+MANYARGS_HOST_RESULT="$("$WORK/manyargs_generated_host")"
+echo "host recompiled result: $MANYARGS_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/manyargs_generated.c" tools/gen_harness_manyargs.c -o "$WORK/manyargs_generated_arm64" 2>/dev/null
+MANYARGS_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/manyargs_generated_arm64")"
+echo "arm64 recompiled result (qemu): $MANYARGS_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$MANYARGS_GROUND_TRUTH" = "$MANYARGS_HOST_RESULT" ] && [ "$MANYARGS_GROUND_TRUTH" = "$MANYARGS_ARM64_RESULT" ]; then
+    echo "PASS (many arguments / stack-passed calling convention): all results match ($MANYARGS_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (many arguments / stack-passed calling convention): results differ (ground truth=$MANYARGS_GROUND_TRUTH, host=$MANYARGS_HOST_RESULT, arm64=$MANYARGS_ARM64_RESULT)"
     exit 1
 fi
