@@ -101,8 +101,34 @@ echo "arm64 recompiled result (qemu): $BITOPS_ARM64_RESULT"
 echo "=========================================="
 if [ "$BITOPS_GROUND_TRUTH" = "$BITOPS_HOST_RESULT" ] && [ "$BITOPS_GROUND_TRUTH" = "$BITOPS_ARM64_RESULT" ]; then
     echo "PASS (bitwise/shift): all results match ($BITOPS_GROUND_TRUTH)"
-    exit 0
 else
     echo "FAIL (bitwise/shift): results differ (ground truth=$BITOPS_GROUND_TRUTH, host=$BITOPS_HOST_RESULT, arm64=$BITOPS_ARM64_RESULT)"
+    exit 1
+fi
+
+echo ""
+echo "== Rotate/mask pipeline (testdata/rotate.c, -O1 -- rlwinm/rlwimi/clrlwi/rotlwi only show up above -O0) =="
+gcc -O0 testdata/rotate.c testdata/rotate_host_main.c -o "$WORK/rotate_ground_truth"
+ROTATE_GROUND_TRUTH="$("$WORK/rotate_ground_truth")"
+echo "ground truth result: $ROTATE_GROUND_TRUTH"
+
+testdata/build_ppc.sh testdata/rotate.c "$WORK/rotate_ppc.o" -O1 >/dev/null
+"$RECOMP" "$WORK/rotate_ppc.o" -o "$WORK/rotate_generated.c" >&2
+
+gcc -O0 -Irecomp/include "$WORK/rotate_generated.c" tools/gen_harness_rotate.c -o "$WORK/rotate_generated_host"
+ROTATE_HOST_RESULT="$("$WORK/rotate_generated_host")"
+echo "host recompiled result: $ROTATE_HOST_RESULT"
+
+"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
+    "$WORK/rotate_generated.c" tools/gen_harness_rotate.c -o "$WORK/rotate_generated_arm64" 2>/dev/null
+ROTATE_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/rotate_generated_arm64")"
+echo "arm64 recompiled result (qemu): $ROTATE_ARM64_RESULT"
+
+echo "=========================================="
+if [ "$ROTATE_GROUND_TRUTH" = "$ROTATE_HOST_RESULT" ] && [ "$ROTATE_GROUND_TRUTH" = "$ROTATE_ARM64_RESULT" ]; then
+    echo "PASS (rotate/mask): all results match ($ROTATE_GROUND_TRUTH)"
+    exit 0
+else
+    echo "FAIL (rotate/mask): results differ (ground truth=$ROTATE_GROUND_TRUTH, host=$ROTATE_HOST_RESULT, arm64=$ROTATE_ARM64_RESULT)"
     exit 1
 fi
