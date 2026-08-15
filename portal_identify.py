@@ -15,6 +15,38 @@ and the character ID table from https://github.com/Texthead1/Skylander-IDs)
 
 Usage:
     python3 tools/portal_identify.py [/dev/hidrawN]
+
+--- 2026-08-15 real-hardware run, real finding, not yet resolved ---
+Ran against whatever Portal of Power hardware was actually connected to
+this machine at the time: lsusb identifies it as
+"RedOctane wireless receiver for skylanders wii" (VID:PID 1430:0150,
+bus-powered, Full Speed) -- the original *Wii*-generation wireless
+Portal of Power's RF receiver dongle, not a directly-wired portal (the
+docstring above doesn't specify which physical unit it was validated
+against, so this may be a different one).
+
+Every write() to the interrupt OUT report -- including the real 0x52
+reset command this tool sends first, and a plain all-zero 32-byte
+probe -- fails immediately with EPROTO, regardless of payload content
+(confirmed via direct os.write() experiments, not just this script).
+The device's real HID report descriptor (pulled via HIDIOCGRDESC, not
+guessed) confirms both Input and Output reports really are 32 bytes
+with no Report ID byte, matching exactly what this script already
+sends -- ruling out a payload-shape bug here.
+
+Real, meaningfully different result from a HIDIOCSFEATURE (SET_REPORT)
+attempt with the same 0x52 payload: ETIMEDOUT, not EPROTO -- the
+control-transfer path actually reached the device and waited for a
+real reply rather than being rejected outright. Best-supported real
+hypothesis given that: the USB dongle itself is alive and enumerating
+correctly, but isn't currently getting a reply over its own RF link
+from an actual physical portal base station -- i.e. this looks like a
+real "no portal currently powered on / paired with this receiver"
+condition, not a bug in this script's protocol implementation. Not
+independently confirmed (would need physical access to power-cycle/
+re-pair the portal, or root for usbmon-level USB tracing, neither
+available in the environment this was diagnosed from) -- flagged
+honestly as the leading hypothesis, not a confirmed root cause.
 """
 import os
 import select
