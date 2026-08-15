@@ -7,7 +7,9 @@ void ppc_init_globals(PpcContext *ctx);
 
 int main(void) {
     static PpcContext ctx;
-    ctx.r[1] = sizeof(ctx.mem) - 256;
+    static PpcSharedMemory ctx_shared;
+    ctx.shared = &ctx_shared;
+    ctx.r[1] = PPC_MEM_SIZE - 256;
     ppc_init_globals(&ctx);
 
     ctx.f[1] = 3.5;   /* a (double) */

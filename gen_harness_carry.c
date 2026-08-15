@@ -12,7 +12,9 @@ void ppc_init_globals(PpcContext *ctx);
 
 int main(void) {
     static PpcContext ctx; /* zero-initialized by BSS */
-    ctx.r[1] = sizeof(ctx.mem) - 256; /* stack pointer, with headroom for stwu */
+    static PpcSharedMemory ctx_shared;
+    ctx.shared = &ctx_shared;
+    ctx.r[1] = PPC_MEM_SIZE - 256; /* stack pointer, with headroom for stwu */
     ppc_init_globals(&ctx);
     ctx.r[3] = 0x12345678u;
     ctx.r[4] = 0x9ABCDEF0u;

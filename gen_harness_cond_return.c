@@ -6,7 +6,9 @@ void ppc_guarded(PpcContext *ctx);
 
 int main(void) {
     static PpcContext ctx;
-    ctx.r[1] = sizeof(ctx.mem) - 256;
+    static PpcSharedMemory ctx_shared;
+    ctx.shared = &ctx_shared;
+    ctx.r[1] = PPC_MEM_SIZE - 256;
 
     ctx.r[3] = (uint32_t)-5;
     ppc_guarded(&ctx);

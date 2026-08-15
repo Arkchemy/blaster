@@ -6,7 +6,9 @@ void ppc_compute(PpcContext *ctx);
 
 int main(void) {
     static PpcContext ctx;
-    ctx.r[1] = sizeof(ctx.mem) - 256;
+    static PpcSharedMemory ctx_shared;
+    ctx.shared = &ctx_shared;
+    ctx.r[1] = PPC_MEM_SIZE - 256;
 
     uint32_t arr_addr = 0x1000;
     int arr[5] = {10, 20, 30, 40, 50};
