@@ -37,16 +37,44 @@ sends -- ruling out a payload-shape bug here.
 Real, meaningfully different result from a HIDIOCSFEATURE (SET_REPORT)
 attempt with the same 0x52 payload: ETIMEDOUT, not EPROTO -- the
 control-transfer path actually reached the device and waited for a
-real reply rather than being rejected outright. Best-supported real
-hypothesis given that: the USB dongle itself is alive and enumerating
-correctly, but isn't currently getting a reply over its own RF link
-from an actual physical portal base station -- i.e. this looks like a
-real "no portal currently powered on / paired with this receiver"
-condition, not a bug in this script's protocol implementation. Not
-independently confirmed (would need physical access to power-cycle/
-re-pair the portal, or root for usbmon-level USB tracing, neither
-available in the environment this was diagnosed from) -- flagged
-honestly as the leading hypothesis, not a confirmed root cause.
+real reply rather than being rejected outright.
+
+--- Update, same day, same session: "no portal powered on" hypothesis
+disproven, real root cause still open ---
+Owner confirmed this unit is connected by a real USB cable (not
+relying on its own RF link to a separate base station the way the
+"wireless receiver" name suggested), and moved it to a different USB
+port -- same real device (re-enumerated as the same VID:PID, kernel
+reassigned the same /dev/hidraw4 node). Both write paths (interrupt
+OUT, HIDIOCSFEATURE) still fail exactly the same way (EPROTO,
+ETIMEDOUT) on the new port.
+
+But a plain blocking read on the device now genuinely returned real,
+unsolicited data: `53 05 00 00 00 0a 00 00 ...` -- the exact `0x53`-
+prefixed "passive status heartbeat" format this file's own
+query_block() comment already documents from earlier real testing.
+This directly disproves the earlier "no portal currently powered on"
+hypothesis: a device with nothing behind it wouldn't be actively
+streaming its own real status heartbeat. The device is genuinely
+alive, powered, and talking -- specifically the *write* direction
+(both interrupt OUT and Feature/SET_REPORT) is what's failing,
+consistently, regardless of port or payload.
+
+Real root cause is still open. Two honest candidates, neither
+confirmed: (1) a genuine Linux kernel/hidraw quirk specific to this
+VID:PID that breaks host-to-device writes while leaving device-to-host
+reads working (would need a kernel hid-quirks entry or usbmon-level
+tracing -- root not available in this environment -- to confirm), or
+(2) this specific "wireless receiver" unit's own firmware may simply
+never have implemented accepting generic host-driven commands over
+this interface at all (only ever needed to be read passively by the
+real Wii console's own driver stack, which might talk to it
+differently than a Wii U-native wired portal). Flagged as two
+plausible hypotheses, not a resolved bug -- resolving further would
+need either root (usbmon) or testing against a confirmed-different
+portal unit (e.g. a real Wii U or PC-native wired portal, not this
+Wii-era "wireless receiver"-branded one) to isolate whether it's
+Linux-side or hardware/firmware-side.
 """
 import os
 import select
