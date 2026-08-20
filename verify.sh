@@ -567,6 +567,7 @@ run_pipeline() {
 run_pipeline andi_lwzu "andi./lwzu (real Wii U code find)" -O1
 run_pipeline cond_return "conditional-return blelr/etc (real Wii U code find)" -O1
 run_pipeline addis_frsp "addis/frsp (real Wii U code find)" -O1
+run_pipeline bss_large "oversized .bss / real Skylanders hang regression" -O0
 
 echo ""
 echo "All pipelines passed."
