@@ -2,7 +2,7 @@
 """
 Static extractor for the real Core::igMetaObject / Core::igMetaField field
 schema (class name -> ordered list of {field_name, meta_field_type}),
-pulled directly out of Bramble's own recompiled C source -- no running
+pulled directly out of Arkchemy's own recompiled C source -- no running
 game required.
 
 Why this works at all: every Alchemy engine class that participates in
@@ -12,13 +12,13 @@ registers that class's own fields, one at a time, by calling real
 functions like `setMetaFieldBasicPropertiesAndValidateAll` or a
 per-type `setDefault__Q2_4Core<N><FieldType>MetaFieldF...`. Each call is
 preceded by a `lis`/`addi` pair loading the field's real NAME STRING
-address (a real pointer into the game's own .rodata), which Bramble's
+address (a real pointer into the game's own .rodata), which Arkchemy's
 recompiler (recomp/src/codegen.cpp) already resolves at compile time and
 prints as a `/* &.rodata+OFFSET */` comment -- OFFSET being the real,
 plain byte offset from the start of the real .rodata section's content,
-not a synthetic Bramble-internal address (see assign_global_addrs in
+not a synthetic Arkchemy-internal address (see assign_global_addrs in
 recomp/src/elf_loader.cpp for why the numeric ctx->r[] value itself is
-*not* directly usable here: it's a Bramble-synthetic PpcContext::mem
+*not* directly usable here: it's a Arkchemy-synthetic PpcContext::mem
 address, unrelated to the real game's .rodata layout -- only the human-
 readable comment preserves the real section+offset).
 

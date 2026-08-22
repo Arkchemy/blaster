@@ -40,7 +40,7 @@ that correctly and generically (rather than hand-coding one Python class
 per known type, which is the same real limitation the original C# tool
 has for anything other than igImage2/ScriptSet) needs the game's own
 compiled reflection metadata (real field name/type/offset per class, from
-the same igMetaObject/igMetaField system Bramble's own recompiler has
+the same igMetaObject/igMetaField system Arkchemy's own recompiler has
 already been reverse engineering against this exact binary), not
 something safely guessable from the container format alone. See the
 bottom of this file for exactly what that next piece needs to plug in as,
@@ -84,7 +84,7 @@ that correctly and generically (rather than hand-coding one Python class
 per known type, which is the same real limitation the original C# tool
 has for anything other than igImage2/ScriptSet) needs the game's own
 compiled reflection metadata (real field name/type/offset per class, from
-the same igMetaObject/igMetaField system Bramble's own recompiler has
+the same igMetaObject/igMetaField system Arkchemy's own recompiler has
 already been reverse engineering against this exact binary), not
 something safely guessable from the container format alone. This is the
 one real, still-open piece behind the mod's own FAQ answer -- "some
@@ -113,7 +113,7 @@ this project's own game dump, not just written and assumed correct:
     python3 tools/extract_field_schema.py --out schema.json
         Statically recovers real per-class field NAMES (616 real fields
         across 616 real classes, in well under a second, no running game
-        needed) straight out of Bramble's own recompiled C source -- see
+        needed) straight out of Arkchemy's own recompiled C source -- see
         that file's own docstring for the real mechanism. Feed its output
         into this file's own `dump-igz` command (above) for field-name
         hints alongside raw object dumps.
@@ -986,14 +986,14 @@ if __name__ == "__main__":
 # lives compiled into the game's own executable as real C++ reflection
 # data (the Core::igMetaObject / Core::igMetaField system).
 #
-# This is exactly the same system Bramble's own recompiler has spent real
+# This is exactly the same system Arkchemy's own recompiler has spent real
 # effort reverse engineering against this exact binary (tfbGame_cafe.rpx)
 # this same session, while chasing an unrelated runtime bug.
 #
 # UPDATE: a first real, working extractor for this now exists --
 # tools/extract_field_schema.py. It statically walks every class's own
 # compiler-generated `arkRegisterInitialize__Q2_4Core<N><ClassName>SFv`
-# function directly out of Bramble's recompiled C source (no running game
+# function directly out of Arkchemy's recompiled C source (no running game
 # needed), resolves each field's real name string out of the actual
 # tfbGame_cafe.rpx .rodata section, and emits a JSON schema of
 # {class_name: [{name, meta_field_type, registered_by}, ...]}. Run
@@ -1018,7 +1018,7 @@ if __name__ == "__main__":
 #     naming pattern extract_field_schema.py already walks.
 #   - Each class also has its own static "__getMeta" function (see e.g.
 #     ppc___getMeta__Q2_4Core15igMemoryContextCFv_static_in_... in
-#     Bramble's own generated_decls.h) returning a pointer to that
+#     Arkchemy's own generated_decls.h) returning a pointer to that
 #     class's own *runtime-constructed* igMetaObject -- real offsets
 #     would need to be read back from there after the class actually
 #     registers (i.e. this one specific piece needs the game running,
