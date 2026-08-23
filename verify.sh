@@ -4,7 +4,25 @@
 # QEMU-emulated ARM64 build of the generated C produce the same result as a
 # plain native build of the original source (ground truth).
 set -e
-cd "$(dirname "$0")/.."
+# Real issue found in an audit, 2026-08-24: this used to cd one level
+# ABOVE the repo and then reference recomp/, tools/ and testdata/ --
+# correct only in the pre-split monorepo. After the org split none of
+# those resolved, so this script (the project's actual
+# recompiler-correctness suite) could not run at all from a fresh clone.
+# Now: stay in the repo, take the harness sources from the repo root
+# where they actually live, and locate the recompiler via CONQUERTRON.
+cd "$(dirname "$0")"
+BLASTER_ROOT="$PWD"
+
+# Where conquertron (the recompiler) is checked out. Defaults to a
+# side-by-side clone; override with CONQUERTRON=/path/to/conquertron.
+CONQUERTRON="${CONQUERTRON:-$BLASTER_ROOT/../conquertron}"
+if [ ! -f "$CONQUERTRON/CMakeLists.txt" ]; then
+    echo "error: conquertron not found at $CONQUERTRON" >&2
+    echo "       clone https://github.com/Arkchemy/conquertron next to this repo," >&2
+    echo "       or run: CONQUERTRON=/path/to/conquertron $0" >&2
+    exit 1
+fi
 
 ZIG="${ZIG:-$HOME/devtools/zig/zig}"
 QEMU_AARCH64="${QEMU_AARCH64:-$HOME/devtools/qemu-aarch64-static}"
@@ -12,9 +30,9 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 echo "== Building recomp tool =="
-cmake -S recomp -B recomp/build -DCMAKE_BUILD_TYPE=Release >/dev/null
-cmake --build recomp/build -j"$(nproc)" >/dev/null
-RECOMP="recomp/build/recomp"
+cmake -S "$CONQUERTRON" -B "$CONQUERTRON/build" -DCMAKE_BUILD_TYPE=Release >/dev/null
+cmake --build "$CONQUERTRON/build" -j"$(nproc)" >/dev/null
+RECOMP="$CONQUERTRON/build/recomp"
 
 echo "== Ground truth (native build of original source) =="
 gcc -O0 testdata/arithmetic.c testdata/host_main.c -o "$WORK/ground_truth"
@@ -28,13 +46,13 @@ echo "== Recompiling PPC object to C =="
 "$RECOMP" "$WORK/arithmetic_ppc.o" -o "$WORK/generated.c"
 
 echo "== Host-native check =="
-gcc -O0 -Irecomp/include "$WORK/generated.c" tools/gen_harness.c -o "$WORK/generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/generated.c" gen_harness.c -o "$WORK/generated_host"
 HOST_RESULT="$("$WORK/generated_host")"
 echo "host recompiled result: $HOST_RESULT"
 
 echo "== ARM64 cross-compile + QEMU check =="
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/generated.c" tools/gen_harness.c -o "$WORK/generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/generated.c" gen_harness.c -o "$WORK/generated_arm64" 2>/dev/null
 ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/generated_arm64")"
 echo "arm64 recompiled result (qemu): $ARM64_RESULT"
 
@@ -42,7 +60,7 @@ echo "== Stripped-binary check (heuristic function boundary recovery) =="
 "$ZIG" cc -target powerpc-freestanding-eabi -O0 -fwrapv -fno-sanitize=undefined -nostdlib \
     -Wl,-e,compute -o "$WORK/linked.elf" testdata/arithmetic.c
 "$RECOMP" --stripped --entry-alias compute "$WORK/linked.elf" -o "$WORK/stripped_generated.c" >&2
-gcc -O0 -Irecomp/include "$WORK/stripped_generated.c" tools/gen_harness.c -o "$WORK/stripped_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/stripped_generated.c" gen_harness.c -o "$WORK/stripped_generated_host"
 STRIPPED_RESULT="$("$WORK/stripped_generated_host")"
 echo "stripped/recovered result: $STRIPPED_RESULT"
 
@@ -63,12 +81,12 @@ echo "ground truth result: $FLOAT_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/floating.c "$WORK/floating_ppc.o" >/dev/null
 "$RECOMP" "$WORK/floating_ppc.o" -o "$WORK/float_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/float_generated.c" tools/gen_harness_float.c -o "$WORK/float_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/float_generated.c" gen_harness_float.c -o "$WORK/float_generated_host"
 FLOAT_HOST_RESULT="$("$WORK/float_generated_host")"
 echo "host recompiled result: $FLOAT_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/float_generated.c" tools/gen_harness_float.c -o "$WORK/float_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/float_generated.c" gen_harness_float.c -o "$WORK/float_generated_arm64" 2>/dev/null
 FLOAT_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/float_generated_arm64")"
 echo "arm64 recompiled result (qemu): $FLOAT_ARM64_RESULT"
 
@@ -89,12 +107,12 @@ echo "ground truth result: $BITOPS_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/bitops.c "$WORK/bitops_ppc.o" >/dev/null
 "$RECOMP" "$WORK/bitops_ppc.o" -o "$WORK/bitops_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/bitops_generated.c" tools/gen_harness.c -o "$WORK/bitops_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/bitops_generated.c" gen_harness.c -o "$WORK/bitops_generated_host"
 BITOPS_HOST_RESULT="$("$WORK/bitops_generated_host")"
 echo "host recompiled result: $BITOPS_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/bitops_generated.c" tools/gen_harness.c -o "$WORK/bitops_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/bitops_generated.c" gen_harness.c -o "$WORK/bitops_generated_arm64" 2>/dev/null
 BITOPS_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/bitops_generated_arm64")"
 echo "arm64 recompiled result (qemu): $BITOPS_ARM64_RESULT"
 
@@ -115,12 +133,12 @@ echo "ground truth result: $ROTATE_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/rotate.c "$WORK/rotate_ppc.o" -O1 >/dev/null
 "$RECOMP" "$WORK/rotate_ppc.o" -o "$WORK/rotate_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/rotate_generated.c" tools/gen_harness_rotate.c -o "$WORK/rotate_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/rotate_generated.c" gen_harness_rotate.c -o "$WORK/rotate_generated_host"
 ROTATE_HOST_RESULT="$("$WORK/rotate_generated_host")"
 echo "host recompiled result: $ROTATE_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/rotate_generated.c" tools/gen_harness_rotate.c -o "$WORK/rotate_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/rotate_generated.c" gen_harness_rotate.c -o "$WORK/rotate_generated_arm64" 2>/dev/null
 ROTATE_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/rotate_generated_arm64")"
 echo "arm64 recompiled result (qemu): $ROTATE_ARM64_RESULT"
 
@@ -141,12 +159,12 @@ echo "ground truth result: $CARRY_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/carry.c "$WORK/carry_ppc.o" >/dev/null
 "$RECOMP" "$WORK/carry_ppc.o" -o "$WORK/carry_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/carry_generated.c" tools/gen_harness_carry.c -o "$WORK/carry_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/carry_generated.c" gen_harness_carry.c -o "$WORK/carry_generated_host"
 CARRY_HOST_RESULT="$("$WORK/carry_generated_host")"
 echo "host recompiled result: $CARRY_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/carry_generated.c" tools/gen_harness_carry.c -o "$WORK/carry_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/carry_generated.c" gen_harness_carry.c -o "$WORK/carry_generated_arm64" 2>/dev/null
 CARRY_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/carry_generated_arm64")"
 echo "arm64 recompiled result (qemu): $CARRY_ARM64_RESULT"
 
@@ -167,12 +185,12 @@ echo "ground truth result: $DIVISION_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/division.c "$WORK/division_ppc.o" >/dev/null
 "$RECOMP" "$WORK/division_ppc.o" -o "$WORK/division_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/division_generated.c" tools/gen_harness_division.c -o "$WORK/division_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/division_generated.c" gen_harness_division.c -o "$WORK/division_generated_host"
 DIVISION_HOST_RESULT="$("$WORK/division_generated_host")"
 echo "host recompiled result: $DIVISION_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/division_generated.c" tools/gen_harness_division.c -o "$WORK/division_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/division_generated.c" gen_harness_division.c -o "$WORK/division_generated_arm64" 2>/dev/null
 DIVISION_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/division_generated_arm64")"
 echo "arm64 recompiled result (qemu): $DIVISION_ARM64_RESULT"
 
@@ -193,12 +211,12 @@ echo "ground truth result: $INDEXED_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/indexed.c "$WORK/indexed_ppc.o" >/dev/null
 "$RECOMP" "$WORK/indexed_ppc.o" -o "$WORK/indexed_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/indexed_generated.c" tools/gen_harness_indexed.c -o "$WORK/indexed_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/indexed_generated.c" gen_harness_indexed.c -o "$WORK/indexed_generated_host"
 INDEXED_HOST_RESULT="$("$WORK/indexed_generated_host")"
 echo "host recompiled result: $INDEXED_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/indexed_generated.c" tools/gen_harness_indexed.c -o "$WORK/indexed_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/indexed_generated.c" gen_harness_indexed.c -o "$WORK/indexed_generated_arm64" 2>/dev/null
 INDEXED_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/indexed_generated_arm64")"
 echo "arm64 recompiled result (qemu): $INDEXED_ARM64_RESULT"
 
@@ -219,12 +237,12 @@ echo "ground truth result: $FCMP_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/fcmp.c "$WORK/fcmp_ppc.o" >/dev/null
 "$RECOMP" "$WORK/fcmp_ppc.o" -o "$WORK/fcmp_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/fcmp_generated.c" tools/gen_harness_fcmp.c -o "$WORK/fcmp_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/fcmp_generated.c" gen_harness_fcmp.c -o "$WORK/fcmp_generated_host"
 FCMP_HOST_RESULT="$("$WORK/fcmp_generated_host")"
 echo "host recompiled result: $FCMP_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/fcmp_generated.c" tools/gen_harness_fcmp.c -o "$WORK/fcmp_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/fcmp_generated.c" gen_harness_fcmp.c -o "$WORK/fcmp_generated_arm64" 2>/dev/null
 FCMP_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/fcmp_generated_arm64")"
 echo "arm64 recompiled result (qemu): $FCMP_ARM64_RESULT"
 
@@ -245,12 +263,12 @@ echo "ground truth result: $MULHW_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/mulhw.c "$WORK/mulhw_ppc.o" -O1 >/dev/null
 "$RECOMP" "$WORK/mulhw_ppc.o" -o "$WORK/mulhw_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/mulhw_generated.c" tools/gen_harness_mulhw.c -o "$WORK/mulhw_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/mulhw_generated.c" gen_harness_mulhw.c -o "$WORK/mulhw_generated_host"
 MULHW_HOST_RESULT="$("$WORK/mulhw_generated_host")"
 echo "host recompiled result: $MULHW_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/mulhw_generated.c" tools/gen_harness_mulhw.c -o "$WORK/mulhw_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/mulhw_generated.c" gen_harness_mulhw.c -o "$WORK/mulhw_generated_arm64" 2>/dev/null
 MULHW_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/mulhw_generated_arm64")"
 echo "arm64 recompiled result (qemu): $MULHW_ARM64_RESULT"
 
@@ -271,12 +289,12 @@ echo "ground truth result: $DOUBLE_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/double.c "$WORK/double_ppc.o" >/dev/null
 "$RECOMP" "$WORK/double_ppc.o" -o "$WORK/double_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/double_generated.c" tools/gen_harness_double.c -o "$WORK/double_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/double_generated.c" gen_harness_double.c -o "$WORK/double_generated_host"
 DOUBLE_HOST_RESULT="$("$WORK/double_generated_host")"
 echo "host recompiled result: $DOUBLE_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/double_generated.c" tools/gen_harness_double.c -o "$WORK/double_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/double_generated.c" gen_harness_double.c -o "$WORK/double_generated_arm64" 2>/dev/null
 DOUBLE_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/double_generated_arm64")"
 echo "arm64 recompiled result (qemu): $DOUBLE_ARM64_RESULT"
 
@@ -297,12 +315,12 @@ echo "ground truth result: $MISC_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/misc_bitops.c "$WORK/misc_bitops_ppc.o" >/dev/null
 "$RECOMP" "$WORK/misc_bitops_ppc.o" -o "$WORK/misc_bitops_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/misc_bitops_generated.c" tools/gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/misc_bitops_generated.c" gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_host"
 MISC_HOST_RESULT="$("$WORK/misc_bitops_generated_host")"
 echo "host recompiled result: $MISC_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/misc_bitops_generated.c" tools/gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/misc_bitops_generated.c" gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_arm64" 2>/dev/null
 MISC_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/misc_bitops_generated_arm64")"
 echo "arm64 recompiled result (qemu): $MISC_ARM64_RESULT"
 
@@ -323,12 +341,12 @@ echo "ground truth result: $MIXED_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/mixed_double.c "$WORK/mixed_double_ppc.o" >/dev/null
 "$RECOMP" "$WORK/mixed_double_ppc.o" -o "$WORK/mixed_double_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/mixed_double_generated.c" tools/gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/mixed_double_generated.c" gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_host"
 MIXED_HOST_RESULT="$("$WORK/mixed_double_generated_host")"
 echo "host recompiled result: $MIXED_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/mixed_double_generated.c" tools/gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/mixed_double_generated.c" gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_arm64" 2>/dev/null
 MIXED_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/mixed_double_generated_arm64")"
 echo "arm64 recompiled result (qemu): $MIXED_ARM64_RESULT"
 
@@ -350,13 +368,13 @@ echo "$GLOBALS_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/globals.c "$WORK/globals_ppc.o" >/dev/null
 "$RECOMP" "$WORK/globals_ppc.o" -o "$WORK/globals_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/globals_generated.c" tools/gen_harness_globals.c -o "$WORK/globals_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/globals_generated.c" gen_harness_globals.c -o "$WORK/globals_generated_host"
 GLOBALS_HOST_RESULT="$("$WORK/globals_generated_host")"
 echo "host recompiled result:"
 echo "$GLOBALS_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/globals_generated.c" tools/gen_harness_globals.c -o "$WORK/globals_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/globals_generated.c" gen_harness_globals.c -o "$WORK/globals_generated_arm64" 2>/dev/null
 GLOBALS_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/globals_generated_arm64")"
 echo "arm64 recompiled result (qemu):"
 echo "$GLOBALS_ARM64_RESULT"
@@ -378,12 +396,12 @@ echo "ground truth result: $MFG_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/multifunc_globals.c "$WORK/multifunc_globals_ppc.o" >/dev/null
 "$RECOMP" "$WORK/multifunc_globals_ppc.o" -o "$WORK/multifunc_globals_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/multifunc_globals_generated.c" tools/gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/multifunc_globals_generated.c" gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_host"
 MFG_HOST_RESULT="$("$WORK/multifunc_globals_generated_host")"
 echo "host recompiled result: $MFG_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/multifunc_globals_generated.c" tools/gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/multifunc_globals_generated.c" gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_arm64" 2>/dev/null
 MFG_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/multifunc_globals_generated_arm64")"
 echo "arm64 recompiled result (qemu): $MFG_ARM64_RESULT"
 
@@ -404,12 +422,12 @@ echo "ground truth result: $FNPTR_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/fnptr.c "$WORK/fnptr_ppc.o" >/dev/null
 "$RECOMP" "$WORK/fnptr_ppc.o" -o "$WORK/fnptr_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/fnptr_generated.c" tools/gen_harness_fnptr.c -o "$WORK/fnptr_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/fnptr_generated.c" gen_harness_fnptr.c -o "$WORK/fnptr_generated_host"
 FNPTR_HOST_RESULT="$("$WORK/fnptr_generated_host")"
 echo "host recompiled result: $FNPTR_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/fnptr_generated.c" tools/gen_harness_fnptr.c -o "$WORK/fnptr_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/fnptr_generated.c" gen_harness_fnptr.c -o "$WORK/fnptr_generated_arm64" 2>/dev/null
 FNPTR_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/fnptr_generated_arm64")"
 echo "arm64 recompiled result (qemu): $FNPTR_ARM64_RESULT"
 
@@ -430,12 +448,12 @@ echo "ground truth result: $LOOP_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/loop_counted.c "$WORK/loop_counted_ppc.o" -O2 >/dev/null
 "$RECOMP" "$WORK/loop_counted_ppc.o" -o "$WORK/loop_counted_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/loop_counted_generated.c" tools/gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/loop_counted_generated.c" gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_host"
 LOOP_HOST_RESULT="$("$WORK/loop_counted_generated_host")"
 echo "host recompiled result: $LOOP_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/loop_counted_generated.c" tools/gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/loop_counted_generated.c" gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_arm64" 2>/dev/null
 LOOP_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/loop_counted_generated_arm64")"
 echo "arm64 recompiled result (qemu): $LOOP_ARM64_RESULT"
 
@@ -456,12 +474,12 @@ echo "ground truth result: $RTBL_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/rodata_table.c "$WORK/rodata_table_ppc.o" -O2 >/dev/null
 "$RECOMP" "$WORK/rodata_table_ppc.o" -o "$WORK/rodata_table_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/rodata_table_generated.c" tools/gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/rodata_table_generated.c" gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_host"
 RTBL_HOST_RESULT="$("$WORK/rodata_table_generated_host")"
 echo "host recompiled result: $RTBL_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/rodata_table_generated.c" tools/gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/rodata_table_generated.c" gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_arm64" 2>/dev/null
 RTBL_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/rodata_table_generated_arm64")"
 echo "arm64 recompiled result (qemu): $RTBL_ARM64_RESULT"
 
@@ -482,12 +500,12 @@ echo "ground truth result: $MANYARGS_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/manyargs.c "$WORK/manyargs_ppc.o" >/dev/null
 "$RECOMP" "$WORK/manyargs_ppc.o" -o "$WORK/manyargs_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/manyargs_generated.c" tools/gen_harness_manyargs.c -o "$WORK/manyargs_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/manyargs_generated.c" gen_harness_manyargs.c -o "$WORK/manyargs_generated_host"
 MANYARGS_HOST_RESULT="$("$WORK/manyargs_generated_host")"
 echo "host recompiled result: $MANYARGS_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/manyargs_generated.c" tools/gen_harness_manyargs.c -o "$WORK/manyargs_generated_arm64" 2>/dev/null
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/manyargs_generated.c" gen_harness_manyargs.c -o "$WORK/manyargs_generated_arm64" 2>/dev/null
 MANYARGS_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/manyargs_generated_arm64")"
 echo "arm64 recompiled result (qemu): $MANYARGS_ARM64_RESULT"
 
@@ -510,13 +528,13 @@ testdata/build_ppc.sh testdata/multifile_b.c "$WORK/multifile_b_ppc.o" >/dev/nul
 "$RECOMP" --extern-globals "$WORK/multifile_a_ppc.o" -o "$WORK/multifile_a_generated.c" >&2
 "$RECOMP" "$WORK/multifile_b_ppc.o" -o "$WORK/multifile_b_generated.c" >&2
 
-gcc -O0 -Irecomp/include "$WORK/multifile_a_generated.c" "$WORK/multifile_b_generated.c" tools/gen_harness_multifile.c \
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/multifile_a_generated.c" "$WORK/multifile_b_generated.c" gen_harness_multifile.c \
     -o "$WORK/multifile_generated_host"
 MULTIFILE_HOST_RESULT="$("$WORK/multifile_generated_host")"
 echo "host recompiled result: $MULTIFILE_HOST_RESULT"
 
-"$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-    "$WORK/multifile_a_generated.c" "$WORK/multifile_b_generated.c" tools/gen_harness_multifile.c \
+"$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+    "$WORK/multifile_a_generated.c" "$WORK/multifile_b_generated.c" gen_harness_multifile.c \
     -o "$WORK/multifile_generated_arm64" 2>/dev/null
 MULTIFILE_ARM64_RESULT="$("$QEMU_AARCH64" "$WORK/multifile_generated_arm64")"
 echo "arm64 recompiled result (qemu): $MULTIFILE_ARM64_RESULT"
@@ -546,12 +564,12 @@ run_pipeline() {
     testdata/build_ppc.sh "testdata/$name.c" "$WORK/${name}_ppc.o" "$opt" >/dev/null
     "$RECOMP" "$WORK/${name}_ppc.o" -o "$WORK/${name}_generated.c" >&2
 
-    gcc -O0 -Irecomp/include "$WORK/${name}_generated.c" "tools/gen_harness_${name}.c" -o "$WORK/${name}_generated_host"
+    gcc -O0 -I"$CONQUERTRON/include" "$WORK/${name}_generated.c" "gen_harness_${name}.c" -o "$WORK/${name}_generated_host"
     host="$("$WORK/${name}_generated_host")"
     echo "host recompiled result: $host"
 
-    "$ZIG" cc -target aarch64-linux-musl -static -Irecomp/include \
-        "$WORK/${name}_generated.c" "tools/gen_harness_${name}.c" -o "$WORK/${name}_generated_arm64" 2>/dev/null
+    "$ZIG" cc -target aarch64-linux-musl -static -I"$CONQUERTRON/include" \
+        "$WORK/${name}_generated.c" "gen_harness_${name}.c" -o "$WORK/${name}_generated_arm64" 2>/dev/null
     arm64="$("$QEMU_AARCH64" "$WORK/${name}_generated_arm64")"
     echo "arm64 recompiled result (qemu): $arm64"
 
