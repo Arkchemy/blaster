@@ -1,0 +1,10 @@
+# Build output and local scratch. verify.sh does all of its real work in
+# a mktemp directory it cleans up itself, so the entries below are about
+# the recompiler build it drives (cmake writes into conquertron's own
+# tree, not this one) and ordinary Python/editor leavings.
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+*.o
+*.elf
