@@ -43,6 +43,39 @@ That matches what the engine does at runtime: `igObjectList` and `igDataList`
 are the types jouster is currently sitting inside, and a raw byte array as one
 member of an object list is exactly the shape a blob field would take.
 
+## igArchive compresses in blocks, not per file
+
+maff, 2026-09-06: *"the igarchive format uses a compressed block system for
+compression and such"*. Verified against all 150 `.bld` files on the USA disc.
+
+The payload is split into fixed-size blocks and each is compressed on its own,
+so reading one archive means decompressing many times. The block table is one
+`uint16` per block at `+0x54`:
+
+* **bit 15** — set = compressed, clear = stored
+* **bits 0-14** — start sector, multiplied by the block size at `+0x10`
+
+`bootstrap.bld` decodes as **36 blocks, 35 compressed and 1 stored**, sectors
+0..95, and its payload is exactly 97 blocks of 2048. Across the whole disc:
+50,052 blocks, of which 2,654 (5.3%) are stored. Every archive is version 8
+with a 2048-byte block, and every payload is a whole number of blocks.
+
+**This is the number that matters for the boot.** jouster reaches LZMA
+**once** (`INFLATE lzma n=1`) and that one call fails on an allocation. A
+correct load of `bootstrap.bld` has to run it **35 times**. So the archive not
+draining is not a subtle protocol problem -- the loader fails on the first
+block of thirty-five and stops.
+
+`blaster/igarchive_blocks.py` dumps the table for any archive.
+
+### Known limit: three archives use more than one block group
+
+`Init_Setup.bld`, `Credits.bld` and `PvP_MainControl.bld` have a table that
+restarts at `0x8000` partway through -- a second block group, not corruption --
+and `Init_Setup.bld` also pads with `0xffff`. The group boundaries are not
+understood yet, and the tool reports them rather than guessing. The other 147
+archives decode as a single group.
+
 ## `.hka` is stored, not compressed
 
 Community knowledge, same source, **unverified**:
