@@ -116,7 +116,26 @@ From bone, 2026-09-06, **not yet verified here**:
   which way round.
 * So instead of a plain `0000000000000001` you find pairs like
   `0000000800000002` in the middle of the section.
-* Resolved, a pair names something like **`ActorInfo::testActor`**.
+* Resolved, a pair names something like **`ActorInfo::testActor`**. His
+  worked example:
+
+```
+TSTR:
+  0: metaobject
+  1: ActorInfo
+  ...
+  8: ^testActor
+```
+
+  stored and retrieved as `0000000100000008` -- TSTR[1] for the namespace and
+  TSTR[8] for the name. He was unsure of the order, so treat which-is-which as
+  open.
+
+Not verified here yet, and it cannot be until block decompression exists: TSTR
+and EXNM live inside igz files, which live inside the archive's *compressed*
+blocks. The one stored block in `bootstrap.bld` (index 35, offset 0x2f800) is
+high-entropy file payload -- its only readable string is `JAPANESE.pak` -- so
+it is content, not fixups.
 
 He also said memory pools on Wii U are **counted**, and listed
 `0, 8, 10, 18, 20, 28` (hex, spaced 8 apart, so six entries of 8 bytes),
