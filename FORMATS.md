@@ -76,6 +76,65 @@ and `Init_Setup.bld` also pads with `0xffff`. The group boundaries are not
 understood yet, and the tool reports them rather than guessing. The other 147
 archives decode as a single group.
 
+## The blocks decompress: LZMA1, and igz comes out
+
+Cracked 2026-09-06. Each block is a self-contained LZMA1 stream:
+
+```
+u16   compressed length, little-endian, NOT counting the 5 bytes below
+u8    LZMA properties, 0x5d   (lc=3 lp=0 pb=2)
+u32   dictionary size, 0x00008000   (32 KB)
+...   raw LZMA1 data, decompressing to at most 32 KB
+```
+
+There is no uncompressed-size field, so it is fed to FORMAT_ALONE with the
+size unknown. `bootstrap.bld` decompresses all **36** blocks, 146,131 ->
+1,121,441 bytes (7.7x), and the output starts `IGZ\x01`. Files span several
+blocks, so only 2 blocks begin with the magic.
+
+`blaster/igarchive_extract.py` does this for any archive.
+
+## The archive TOC stores FNV-1a-32 filename hashes
+
+```
++0x34  4d44506c   = fnv1a32("JAPANESE.pak")   exact match
++0x3c  00000800   offset, sector 1
++0x40  00000af5   size 2805  -- exactly the first extracted igz
++0x44  20000000   flags
++0x48  00001000   next entry, sector 2
+```
+
+Which answers a question from the Discord: `2491C795` is **not** a hashed
+name, in either byte order, under FNV-1a, FNV-1 or CRC32. It is the first
+four bytes of LZMA payload. The real hashes live in the TOC and FNV-1a-32 is
+the function.
+
+## igz fixup sections, verified
+
+bone's section names are right; the tags are stored **byte-reversed** relative
+to the rest of the file, which is big-endian. Searching for `TSTR` finds
+nothing and `RTST` finds it. Layout:
+
+```
+<tag, byte-reversed><u32 count><u32 total size><u32 header size><data>
+```
+
+In `bootstrap.bld`'s first igz: TMET, MTSZ, RVTB, RSTR, ROFS, ROOT; across the
+whole payload also TSTR, TMHN, **EXNM** and EXID. TMET's data begins `igOb`,
+the metaobject type names, and readable strings include `igObjectList`,
+`LanguagePackInfo`, `Default`, `Vertex`, `AnimationData`.
+
+**EXNM checks out exactly as bone described it** -- at 0x1a05, count 21,
+entries are pairs of big-endian u32:
+
+```
+00000000 00000001
+00000000 00000002
+00000000 00000003
+```
+
+namespace index and name index, both into TSTR.
+
 ## `.hka` is stored, not compressed
 
 Community knowledge, same source, **unverified**:
