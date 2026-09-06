@@ -1,0 +1,85 @@
+# Alchemy container formats
+
+What is established about the containers the engine reads, and where each fact
+came from. Community knowledge is attributed and marked unverified until it is
+checked against the disc.
+
+## `.bld` is an igArchive, not an igz
+
+Verified 2026-09-06 against `content/permanent/bootstrap.bld` on the USA disc.
+Despite the extension, a `.bld` is an **igArchive** container:
+
+```
++0x00  49 47 41 1a   "IGA\x1a"   magic
++0x04  0x00000008                version
++0x08  0x0000006a                106 entries
++0x0c  0x00000002
++0x10  0x00000800                2048, sector or alignment
++0x14  0x7fffffff
++0x1c  0x00030800                198656, just under the 198695-byte file
++0x20  0x00000027                39
++0x28  0x00000024                36
++0x34  0x4d44506c
+```
+
+The header is **little-endian** even though the title is big-endian PowerPC.
+
+This is confirmed end to end against jouster's boot: the runtime logs
+`fsz=198695`, which is `bootstrap.bld`'s exact size, and
+`head=[0x4947411a,0x08000000,0x6a000000,0x02000000]`, which is these same
+first sixteen bytes read as big-endian words. The read path is correct; the
+boot stalls after this, not before it.
+
+150 `.bld` files ship on the disc.
+
+## `.igz` is a list of objects
+
+Community knowledge, from the Discord, 2026-09-06 — **not yet verified here**:
+
+> An igz file (`level.bld` and friends) is a list of objects, and one of those
+> objects is just an array of bytes.
+
+That matches what the engine does at runtime: `igObjectList` and `igDataList`
+are the types jouster is currently sitting inside, and a raw byte array as one
+member of an object list is exactly the shape a blob field would take.
+
+## `.hka` is stored, not compressed
+
+Community knowledge, same source, **unverified**:
+
+> The `.hka` files are just stored like that.
+
+i.e. held in the archive uncompressed rather than LZMA'd. Worth confirming,
+because it bears directly on the boot: jouster reaches LZMA exactly once
+(`INFLATE lzma n=1 ok=1`) against an archive with 106 entries. If some entries
+are stored rather than compressed, the loader needs a path that does not run
+them through LZMA at all.
+
+Also reported: every SSA and Giants Build 1 `.hka` is only around 20 MB in
+total, which the source called surprising. No loose `.hka` files exist on the
+disc, so they live inside the archives.
+
+## Platform-specific content does not matter here
+
+Also from the Discord, and worth writing down because it is the reasoning
+behind the whole approach:
+
+> The files use a lot of platform-specific stuff, but for a recomp that
+> shouldn't affect anything.
+
+Correct, and it is the argument for recompiling over reimplementing. A
+reimplementation has to understand every platform-specific encoding a file
+uses. A recompilation runs *the original code that already understands them*,
+so platform-specific asset content is handled by the same routines that
+handled it on the Wii U.
+
+## Who to ask
+
+**Bone** and **NefariousTechSupport** are the igz experts. NefariousTechSupport
+wrote [igRewrite8](https://github.com/NefariousTechSupport/igRewrite8), the C#
+reimplementation of the Alchemy runtime, and is already credited in
+CONTRIBUTORS. Ask them before reverse-engineering igz internals from scratch.
+
+Note that igRewrite8 models the **filesystem and work-item** side well and its
+`igMemoryPool` is a 45-line stub, so it answers file-format questions but not
+allocator ones.
