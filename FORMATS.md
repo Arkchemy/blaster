@@ -106,6 +106,40 @@ uses. A recompilation runs *the original code that already understands them*,
 so platform-specific asset content is handled by the same routines that
 handled it on the Wii U.
 
+## igz fixups: EXNM, and how external references work
+
+From bone, 2026-09-06, **not yet verified here**:
+
+* An igz carries fixup sections; **EXNM** is the external-name one.
+* An EXNM entry is **8 bytes: two 32-bit indices into TSTR**, the string
+  table. One is the namespace, the other the name -- bone was not certain
+  which way round.
+* So instead of a plain `0000000000000001` you find pairs like
+  `0000000800000002` in the middle of the section.
+* Resolved, a pair names something like **`ActorInfo::testActor`**.
+
+He also said memory pools on Wii U are **counted**, and listed
+`0, 8, 10, 18, 20, 28` (hex, spaced 8 apart, so six entries of 8 bytes),
+noting Wii U *"uses the first five bits, instead of 4 like in the other
+games"*, and that **there is a defined order of which memory pool comes first
+in the file**. Asked which is 6th in `bootstrap.bld`, he answered **`0x28`** --
+consistent with 8-byte entries where the 6th sits at offset 0x28.
+
+### An open discrepancy worth resolving
+
+At runtime our LZMA path asks `igMemoryContext::getMemoryPoolByIndex()` for
+**`0x1c`** and gets NULL. `0x1c` is not in bone's list, and it is not a
+multiple of 8, so either it is a different quantity from the one he listed
+(an index rather than an offset) or we are deriving it wrongly. This is the
+single value the boot dies on, so it is worth settling before anything else.
+
+Where our `0x1c` comes from, exactly: a game global -- jouster address 421612,
+`.bss+306684` -- holds `0x1c`, and that value is passed straight to
+`getMemoryPoolByIndex`. Separately, a different path derives an index by
+`word >> 22` from an object's `+0x04` field, which for the objects we have
+dumped (`+0x04 = 0x00800001`) yields **2**, matching the `idx=2` the runtime
+reports elsewhere. Those two paths disagree, and only the first one fails.
+
 ## Who to ask
 
 **Bone** and **NefariousTechSupport** are the igz experts. NefariousTechSupport
