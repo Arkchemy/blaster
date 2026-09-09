@@ -28,3 +28,11 @@ sh tools/verify.sh
 inside either — it's a real, git-tracked directory in this repo
 (`blaster/testdata/`), just referenced by `verify.sh` via a monorepo-relative
 path rather than `tools/testdata/`.
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [`ROADMAP.md`](ROADMAP.md) | Formats solved and formats open |
+| [`FORMATS.md`](FORMATS.md) | igArchive container, block table, compression |
+| [`IGZ.md`](IGZ.md) | igz structure, pools, fixups, packed pointers |
