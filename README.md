@@ -68,6 +68,35 @@ container and reports what it finds rather than asserting a layout.
 **The Bink pair matters beyond shader work**: they are the shaders the boot
 video needs, which is a milestone of its own.
 
+### Program structure
+
+`r600.py` reports the layout of an extracted program. Every one of the five is
+the same shape — **CF section at byte 0, clauses from byte 256**:
+
+| shader | CF | ALU clause | TEX clause |
+| --- | --- | --- | --- |
+| defaultVertexShader | 6 instr | 184 B | — |
+| defaultPixelShader | 6 | 40 B | **1** fetch |
+| binkVertexShader | 6 | 152 B | — |
+| binkPixelShader | 3 | 112 B | **3** fetches |
+| binkAlphaPixelShader | 3 | 96 B | **4** fetches |
+
+The texture counts were a **prediction before they were a measurement**. Bink
+video is YUV, so its pixel shader should sample three planes and the alpha
+variant four; the default shader should sample one. Three for three, all exact
+multiples of 16 bytes. A wrong instruction size or word order would not
+produce that.
+
+Word order is big-endian, established the same way: testing the CF
+end-of-program bit gave 3 candidate positions big-endian against 15 scattered
+little-endian, and the layout above comes out clean one way and as noise the
+other.
+
+`r600.py` is **not a disassembler**, deliberately. The per-instruction
+encodings live in AMD's R600/R700 ISA document, which is not on this machine,
+and writing a decoder from memory produces output that looks like a
+disassembly and is wrong in ways nobody notices for a week.
+
 ## Documentation
 
 | Document | What it covers |
