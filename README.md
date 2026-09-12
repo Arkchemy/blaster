@@ -87,15 +87,15 @@ variant four; the default shader should sample one. Three for three, all exact
 multiples of 16 bytes. A wrong instruction size or word order would not
 produce that.
 
-Word order is big-endian, established the same way: testing the CF
-end-of-program bit gave 3 candidate positions big-endian against 15 scattered
-little-endian, and the layout above comes out clean one way and as noise the
-other.
+Word order is **little-endian**. An earlier version of this README said
+big-endian and was wrong: that test scanned whole programs for end-of-program
+bits, where most words are ALU and TEX and bit 21 means something else, so it
+counted noise. Scanning the CF section alone gives zero such bits big-endian,
+which is impossible, and exactly one little-endian.
 
-`r600.py` is **not a disassembler**, deliberately. The per-instruction
-encodings live in AMD's R600/R700 ISA document, which is not on this machine,
-and writing a decoder from memory produces output that looks like a
-disassembly and is wrong in ways nobody notices for a week.
+`r600.py --cf` disassembles the control-flow section. The ISA document
+(`reference/r600isa.pdf`) arrived on 2026-09-12; the first thing it did was
+disprove the word-order claim above.
 
 ## Documentation
 
