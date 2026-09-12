@@ -93,7 +93,25 @@ bits, where most words are ALU and TEX and bit 21 means something else, so it
 counted noise. Scanning the CF section alone gives zero such bits big-endian,
 which is impossible, and exactly one little-endian.
 
-`r600.py --cf` disassembles the control-flow section. The ISA document
+`r600.py --cf` disassembles the control-flow section and expands texture
+clauses inline:
+
+```
+binkPixelShader
+   0  TEX              addr=384    (3 instructions)
+    0: SAMPLE         R1.w___ <- R0.xy0x  resource=1 sampler=1
+    1: SAMPLE         R2.w___ <- R0.xy0x  resource=0 sampler=0
+    2: SAMPLE         R0.w___ <- R0.xy0x  resource=2 sampler=2
+   1  ALU              addr=256    (14 slots)
+   2  EXPORT_DONE      type=0 array_base=0  END_OF_PROGRAM
+```
+
+Three single-channel samples at identical coordinates from three separate
+resources: a planar YUV fetch, which is what a Bink video shader should be.
+The alpha variant adds a fourth into the `w` channel; the default shader takes
+all four channels from one texture. The Y/U/V prediction was made from byte
+counts before any instruction could be decoded, and it holds at instruction
+level. The ISA document
 (`reference/r600isa.pdf`) arrived on 2026-09-12; the first thing it did was
 disprove the word-order claim above.
 

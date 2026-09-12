@@ -192,6 +192,7 @@ CLAUSE_INSTS = {"TEX", "VTX", "VTX_TC"}
 
 
 def disasm_cf(blob: bytes) -> list[str]:
+    """Control flow, expanding texture clauses inline."""
     """Disassemble the control-flow section, which runs until the first
     all-zero slot -- the padding out to the clause base."""
     words = struct.unpack(f"<{len(blob) // 4}I", blob)
@@ -221,7 +222,50 @@ def disasm_cf(blob: bytes) -> list[str]:
             else:
                 extra = f"addr={w0 * 8}"
             out.append(f"  {i:2}  {name:16} {extra}{'  END_OF_PROGRAM' if eop else ''}")
+            if name == "TEX":
+                out.extend(disasm_tex(blob, w0 * 8, count))
         i += 1
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Texture-fetch clause disassembly. R700 doc, "Texture Fetch Doubleword 0/1/2".
+#
+# A TEX instruction is 128 bits: three used doublewords and one of zeros.
+# ---------------------------------------------------------------------------
+
+TEX_INST = {
+    0: "VTX_FETCH", 1: "VTX_SEMANTIC", 2: "MEM", 3: "LD",
+    4: "GET_TEXTURE_RESINFO", 5: "GET_NUMBER_OF_SAMPLES", 6: "GET_COMP_TEX_LOD",
+    7: "GET_GRADIENTS_H", 8: "GET_GRADIENTS_V", 9: "GET_LERP",
+    10: "KEEP_GRADIENTS", 11: "SET_GRADIENTS_H", 12: "SET_GRADIENTS_V",
+    14: "SET_CUBEMAP_INDEX", 15: "FETCH4",
+    16: "SAMPLE", 17: "SAMPLE_L", 18: "SAMPLE_LB", 19: "SAMPLE_LZ",
+    20: "SAMPLE_G", 21: "SAMPLE_G_L", 22: "SAMPLE_G_LB", 23: "SAMPLE_G_LZ",
+    24: "SAMPLE_C", 25: "SAMPLE_C_L", 26: "SAMPLE_C_LB", 27: "SAMPLE_C_LZ",
+    28: "SAMPLE_C_G", 29: "SAMPLE_C_G_L", 30: "SAMPLE_C_G_LB", 31: "SAMPLE_C_G_LZ",
+}
+
+#: Channel selects. 4 and 5 are the constants, 7 means the channel is not
+#: written -- which is how a shader says it only wants one component back.
+SEL = {0: "x", 1: "y", 2: "z", 3: "w", 4: "0", 5: "1", 6: "?", 7: "_"}
+
+
+def disasm_tex(blob: bytes, offset: int, count: int) -> list[str]:
+    words = struct.unpack_from(f"<{count * 4}I", blob, offset)
+    out = []
+    for i in range(count):
+        w0, w1, w2 = words[i * 4], words[i * 4 + 1], words[i * 4 + 2]
+        inst = w0 & 0x1F
+        res = (w0 >> 8) & 0xFF
+        src_gpr = (w0 >> 16) & 0x7F
+        dst_gpr = w1 & 0x7F
+        dsel = "".join(SEL[(w1 >> b) & 7] for b in (9, 12, 15, 18))
+        sampler = (w2 >> 15) & 0x1F
+        ssel = "".join(SEL[(w2 >> b) & 7] for b in (20, 23, 26, 29))
+        out.append(f"    {i}: {TEX_INST.get(inst, '?%d' % inst):14} "
+                   f"R{dst_gpr}.{dsel} <- R{src_gpr}.{ssel}  "
+                   f"resource={res} sampler={sampler}")
     return out
 
 
