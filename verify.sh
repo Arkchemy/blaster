@@ -29,6 +29,9 @@ QEMU_AARCH64="${QEMU_AARCH64:-$HOME/devtools/qemu-aarch64-static}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# Generated code links against libm: the runtime uses sqrt, ldexpf and
+# (since conquertron's fused multiply-add fix) fma, and jouster links -lm for
+# the same reason. Until 2026-09-24 no test here happened to need it.
 echo "== Building recomp tool =="
 cmake -S "$CONQUERTRON" -B "$CONQUERTRON/build" -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "$CONQUERTRON/build" -j"$(nproc)" >/dev/null
@@ -46,7 +49,7 @@ echo "== Recompiling PPC object to C =="
 "$RECOMP" "$WORK/arithmetic_ppc.o" -o "$WORK/generated.c"
 
 echo "== Host-native check =="
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/generated.c" gen_harness.c -o "$WORK/generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/generated.c" gen_harness.c -o "$WORK/generated_host" -lm
 HOST_RESULT="$("$WORK/generated_host")"
 echo "host recompiled result: $HOST_RESULT"
 
@@ -60,7 +63,7 @@ echo "== Stripped-binary check (heuristic function boundary recovery) =="
 "$ZIG" cc -target powerpc-freestanding-eabi -O0 -fwrapv -fno-sanitize=undefined -nostdlib \
     -Wl,-e,compute -o "$WORK/linked.elf" testdata/arithmetic.c
 "$RECOMP" --stripped --entry-alias compute "$WORK/linked.elf" -o "$WORK/stripped_generated.c" >&2
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/stripped_generated.c" gen_harness.c -o "$WORK/stripped_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/stripped_generated.c" gen_harness.c -o "$WORK/stripped_generated_host" -lm
 STRIPPED_RESULT="$("$WORK/stripped_generated_host")"
 echo "stripped/recovered result: $STRIPPED_RESULT"
 
@@ -81,7 +84,7 @@ echo "ground truth result: $FLOAT_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/floating.c "$WORK/floating_ppc.o" >/dev/null
 "$RECOMP" "$WORK/floating_ppc.o" -o "$WORK/float_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/float_generated.c" gen_harness_float.c -o "$WORK/float_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/float_generated.c" gen_harness_float.c -o "$WORK/float_generated_host" -lm
 FLOAT_HOST_RESULT="$("$WORK/float_generated_host")"
 echo "host recompiled result: $FLOAT_HOST_RESULT"
 
@@ -107,7 +110,7 @@ echo "ground truth result: $BITOPS_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/bitops.c "$WORK/bitops_ppc.o" >/dev/null
 "$RECOMP" "$WORK/bitops_ppc.o" -o "$WORK/bitops_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/bitops_generated.c" gen_harness.c -o "$WORK/bitops_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/bitops_generated.c" gen_harness.c -o "$WORK/bitops_generated_host" -lm
 BITOPS_HOST_RESULT="$("$WORK/bitops_generated_host")"
 echo "host recompiled result: $BITOPS_HOST_RESULT"
 
@@ -133,7 +136,7 @@ echo "ground truth result: $ROTATE_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/rotate.c "$WORK/rotate_ppc.o" -O1 >/dev/null
 "$RECOMP" "$WORK/rotate_ppc.o" -o "$WORK/rotate_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/rotate_generated.c" gen_harness_rotate.c -o "$WORK/rotate_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/rotate_generated.c" gen_harness_rotate.c -o "$WORK/rotate_generated_host" -lm
 ROTATE_HOST_RESULT="$("$WORK/rotate_generated_host")"
 echo "host recompiled result: $ROTATE_HOST_RESULT"
 
@@ -159,7 +162,7 @@ echo "ground truth result: $CARRY_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/carry.c "$WORK/carry_ppc.o" >/dev/null
 "$RECOMP" "$WORK/carry_ppc.o" -o "$WORK/carry_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/carry_generated.c" gen_harness_carry.c -o "$WORK/carry_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/carry_generated.c" gen_harness_carry.c -o "$WORK/carry_generated_host" -lm
 CARRY_HOST_RESULT="$("$WORK/carry_generated_host")"
 echo "host recompiled result: $CARRY_HOST_RESULT"
 
@@ -185,7 +188,7 @@ echo "ground truth result: $DIVISION_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/division.c "$WORK/division_ppc.o" >/dev/null
 "$RECOMP" "$WORK/division_ppc.o" -o "$WORK/division_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/division_generated.c" gen_harness_division.c -o "$WORK/division_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/division_generated.c" gen_harness_division.c -o "$WORK/division_generated_host" -lm
 DIVISION_HOST_RESULT="$("$WORK/division_generated_host")"
 echo "host recompiled result: $DIVISION_HOST_RESULT"
 
@@ -211,7 +214,7 @@ echo "ground truth result: $INDEXED_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/indexed.c "$WORK/indexed_ppc.o" >/dev/null
 "$RECOMP" "$WORK/indexed_ppc.o" -o "$WORK/indexed_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/indexed_generated.c" gen_harness_indexed.c -o "$WORK/indexed_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/indexed_generated.c" gen_harness_indexed.c -o "$WORK/indexed_generated_host" -lm
 INDEXED_HOST_RESULT="$("$WORK/indexed_generated_host")"
 echo "host recompiled result: $INDEXED_HOST_RESULT"
 
@@ -237,7 +240,7 @@ echo "ground truth result: $FCMP_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/fcmp.c "$WORK/fcmp_ppc.o" >/dev/null
 "$RECOMP" "$WORK/fcmp_ppc.o" -o "$WORK/fcmp_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/fcmp_generated.c" gen_harness_fcmp.c -o "$WORK/fcmp_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/fcmp_generated.c" gen_harness_fcmp.c -o "$WORK/fcmp_generated_host" -lm
 FCMP_HOST_RESULT="$("$WORK/fcmp_generated_host")"
 echo "host recompiled result: $FCMP_HOST_RESULT"
 
@@ -263,7 +266,7 @@ echo "ground truth result: $MULHW_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/mulhw.c "$WORK/mulhw_ppc.o" -O1 >/dev/null
 "$RECOMP" "$WORK/mulhw_ppc.o" -o "$WORK/mulhw_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/mulhw_generated.c" gen_harness_mulhw.c -o "$WORK/mulhw_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/mulhw_generated.c" gen_harness_mulhw.c -o "$WORK/mulhw_generated_host" -lm
 MULHW_HOST_RESULT="$("$WORK/mulhw_generated_host")"
 echo "host recompiled result: $MULHW_HOST_RESULT"
 
@@ -289,7 +292,7 @@ echo "ground truth result: $DOUBLE_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/double.c "$WORK/double_ppc.o" >/dev/null
 "$RECOMP" "$WORK/double_ppc.o" -o "$WORK/double_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/double_generated.c" gen_harness_double.c -o "$WORK/double_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/double_generated.c" gen_harness_double.c -o "$WORK/double_generated_host" -lm
 DOUBLE_HOST_RESULT="$("$WORK/double_generated_host")"
 echo "host recompiled result: $DOUBLE_HOST_RESULT"
 
@@ -315,7 +318,7 @@ echo "ground truth result: $MISC_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/misc_bitops.c "$WORK/misc_bitops_ppc.o" >/dev/null
 "$RECOMP" "$WORK/misc_bitops_ppc.o" -o "$WORK/misc_bitops_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/misc_bitops_generated.c" gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/misc_bitops_generated.c" gen_harness_misc_bitops.c -o "$WORK/misc_bitops_generated_host" -lm
 MISC_HOST_RESULT="$("$WORK/misc_bitops_generated_host")"
 echo "host recompiled result: $MISC_HOST_RESULT"
 
@@ -341,7 +344,7 @@ echo "ground truth result: $MIXED_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/mixed_double.c "$WORK/mixed_double_ppc.o" >/dev/null
 "$RECOMP" "$WORK/mixed_double_ppc.o" -o "$WORK/mixed_double_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/mixed_double_generated.c" gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/mixed_double_generated.c" gen_harness_mixed_double.c -o "$WORK/mixed_double_generated_host" -lm
 MIXED_HOST_RESULT="$("$WORK/mixed_double_generated_host")"
 echo "host recompiled result: $MIXED_HOST_RESULT"
 
@@ -368,7 +371,7 @@ echo "$GLOBALS_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/globals.c "$WORK/globals_ppc.o" >/dev/null
 "$RECOMP" "$WORK/globals_ppc.o" -o "$WORK/globals_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/globals_generated.c" gen_harness_globals.c -o "$WORK/globals_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/globals_generated.c" gen_harness_globals.c -o "$WORK/globals_generated_host" -lm
 GLOBALS_HOST_RESULT="$("$WORK/globals_generated_host")"
 echo "host recompiled result:"
 echo "$GLOBALS_HOST_RESULT"
@@ -396,7 +399,7 @@ echo "ground truth result: $MFG_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/multifunc_globals.c "$WORK/multifunc_globals_ppc.o" >/dev/null
 "$RECOMP" "$WORK/multifunc_globals_ppc.o" -o "$WORK/multifunc_globals_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/multifunc_globals_generated.c" gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/multifunc_globals_generated.c" gen_harness_multifunc_globals.c -o "$WORK/multifunc_globals_generated_host" -lm
 MFG_HOST_RESULT="$("$WORK/multifunc_globals_generated_host")"
 echo "host recompiled result: $MFG_HOST_RESULT"
 
@@ -422,7 +425,7 @@ echo "ground truth result: $FNPTR_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/fnptr.c "$WORK/fnptr_ppc.o" >/dev/null
 "$RECOMP" "$WORK/fnptr_ppc.o" -o "$WORK/fnptr_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/fnptr_generated.c" gen_harness_fnptr.c -o "$WORK/fnptr_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/fnptr_generated.c" gen_harness_fnptr.c -o "$WORK/fnptr_generated_host" -lm
 FNPTR_HOST_RESULT="$("$WORK/fnptr_generated_host")"
 echo "host recompiled result: $FNPTR_HOST_RESULT"
 
@@ -448,7 +451,7 @@ echo "ground truth result: $LOOP_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/loop_counted.c "$WORK/loop_counted_ppc.o" -O2 >/dev/null
 "$RECOMP" "$WORK/loop_counted_ppc.o" -o "$WORK/loop_counted_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/loop_counted_generated.c" gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/loop_counted_generated.c" gen_harness_loop_counted.c -o "$WORK/loop_counted_generated_host" -lm
 LOOP_HOST_RESULT="$("$WORK/loop_counted_generated_host")"
 echo "host recompiled result: $LOOP_HOST_RESULT"
 
@@ -474,7 +477,7 @@ echo "ground truth result: $RTBL_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/rodata_table.c "$WORK/rodata_table_ppc.o" -O2 >/dev/null
 "$RECOMP" "$WORK/rodata_table_ppc.o" -o "$WORK/rodata_table_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/rodata_table_generated.c" gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/rodata_table_generated.c" gen_harness_rodata_table.c -o "$WORK/rodata_table_generated_host" -lm
 RTBL_HOST_RESULT="$("$WORK/rodata_table_generated_host")"
 echo "host recompiled result: $RTBL_HOST_RESULT"
 
@@ -500,7 +503,7 @@ echo "ground truth result: $MANYARGS_GROUND_TRUTH"
 testdata/build_ppc.sh testdata/manyargs.c "$WORK/manyargs_ppc.o" >/dev/null
 "$RECOMP" "$WORK/manyargs_ppc.o" -o "$WORK/manyargs_generated.c" >&2
 
-gcc -O0 -I"$CONQUERTRON/include" "$WORK/manyargs_generated.c" gen_harness_manyargs.c -o "$WORK/manyargs_generated_host"
+gcc -O0 -I"$CONQUERTRON/include" "$WORK/manyargs_generated.c" gen_harness_manyargs.c -o "$WORK/manyargs_generated_host" -lm
 MANYARGS_HOST_RESULT="$("$WORK/manyargs_generated_host")"
 echo "host recompiled result: $MANYARGS_HOST_RESULT"
 
@@ -529,7 +532,7 @@ testdata/build_ppc.sh testdata/multifile_b.c "$WORK/multifile_b_ppc.o" >/dev/nul
 "$RECOMP" "$WORK/multifile_b_ppc.o" -o "$WORK/multifile_b_generated.c" >&2
 
 gcc -O0 -I"$CONQUERTRON/include" "$WORK/multifile_a_generated.c" "$WORK/multifile_b_generated.c" gen_harness_multifile.c \
-    -o "$WORK/multifile_generated_host"
+    -o "$WORK/multifile_generated_host" -lm
 MULTIFILE_HOST_RESULT="$("$WORK/multifile_generated_host")"
 echo "host recompiled result: $MULTIFILE_HOST_RESULT"
 
@@ -564,7 +567,7 @@ run_pipeline() {
     testdata/build_ppc.sh "testdata/$name.c" "$WORK/${name}_ppc.o" "$opt" >/dev/null
     "$RECOMP" "$WORK/${name}_ppc.o" -o "$WORK/${name}_generated.c" >&2
 
-    gcc -O0 -I"$CONQUERTRON/include" "$WORK/${name}_generated.c" "gen_harness_${name}.c" -o "$WORK/${name}_generated_host"
+    gcc -O0 -I"$CONQUERTRON/include" "$WORK/${name}_generated.c" "gen_harness_${name}.c" -o "$WORK/${name}_generated_host" -lm
     host="$("$WORK/${name}_generated_host")"
     echo "host recompiled result: $host"
 
