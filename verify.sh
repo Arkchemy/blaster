@@ -586,6 +586,8 @@ run_pipeline andi_lwzu "andi./lwzu (real Wii U code find)" -O1
 run_pipeline cond_return "conditional-return blelr/etc (real Wii U code find)" -O1
 run_pipeline addis_frsp "addis/frsp (real Wii U code find)" -O1
 run_pipeline bss_large "oversized .bss / real Skylanders hang regression" -O0
+run_pipeline setjmp "setjmp/longjmp across recompiled frames" -O0
+run_pipeline setjmp "setjmp/longjmp across recompiled frames, optimised" -O1
 
 echo ""
 echo "All pipelines passed."
