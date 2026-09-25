@@ -591,6 +591,8 @@ run_pipeline addis_frsp "addis/frsp (real Wii U code find)" -O1
 run_pipeline bss_large "oversized .bss / real Skylanders hang regression" -O0
 run_pipeline setjmp "setjmp/longjmp across recompiled frames" -O0
 run_pipeline setjmp "setjmp/longjmp across recompiled frames, optimised" -O1
+run_pipeline switch_table "switch through a jump table of case addresses" "-O2 -mllvm -ppc-min-jump-table-entries=4"
+run_pipeline name_collision "guest functions named like runtime functions" -O1
 
 echo ""
 echo "All pipelines passed."

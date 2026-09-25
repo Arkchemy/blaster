@@ -26,7 +26,10 @@ SRC="${1:-testdata/arithmetic.c}"
 OUT="${2:-/tmp/$(basename "$SRC" .c)_ppc.o}"
 OPT="${3:--O0}"
 
-"$ZIG" cc -target powerpc-freestanding-eabihf "$OPT" -fwrapv -fno-sanitize=undefined \
+# $OPT is deliberately unquoted: it may carry more than one flag (the
+# switch_table pipeline passes "-O2 -mllvm -ppc-min-jump-table-entries=4").
+# shellcheck disable=SC2086
+"$ZIG" cc -target powerpc-freestanding-eabihf $OPT -fwrapv -fno-sanitize=undefined \
     -c "$SRC" -o "$OUT"
 
 echo "wrote $OUT"
